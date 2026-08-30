@@ -1,0 +1,8 @@
+node_modules/
+dist/
+build/*
+!build/icon.icns
+state.json
+.DS_Store
+*.log
+npm-debug.log*

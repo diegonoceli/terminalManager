@@ -1,0 +1,39 @@
+{
+  "name": "maestri-like",
+  "version": "1.0.0",
+  "description": "Canvas espacial com terminais PTY multiplos estilo Miro/Maestri (app desktop)",
+  "author": "diego",
+  "type": "module",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "postinstall": "node scripts/fetch-vendor.js && node scripts/fix-pty-perms.js"
+  },
+  "dependencies": {
+    "node-pty": "^1.1.0"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.diego.maestrilike",
+    "productName": "maestri-like",
+    "asar": true,
+    "files": [
+      "electron/**/*",
+      "public/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg",
+        "dir"
+      ],
+      "icon": "build/icon.icns",
+      "identity": null
+    },
+    "npmRebuild": true
+  }
+}
