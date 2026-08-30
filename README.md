@@ -2,20 +2,49 @@
 
 Aplicativo **desktop** (Electron) com canvas espacial estilo Miro/Maestri: uma página infinita onde você posiciona vários terminais **reais** (PTY), cada um com nome preso acima, navega com zoom/pan e personaliza cores, fundo e fonte de cada terminal.
 
+## Requisitos
+
+Apenas **Node.js** (que já inclui o npm) — [nodejs.org](https://nodejs.org).
+
+Nada mais precisa ser instalado: o `node-pty` já vem com binários prontos (N-API) para macOS e Windows, então **nenhum compilador ou pacote do sistema é necessário**. Todos os comandos são via `npm`.
+
+## Instalação
+
+```bash
+npm install   # instala dependências (node-pty, electron) e baixa o xterm.js
+```
+
 ## Executar
 
 ```bash
-npm install        # instala dependências (node-pty, electron) e baixa o xterm.js
-npm start          # abre o app numa janela nativa do Electron
+npm start     # abre o app numa janela nativa do Electron
 ```
 
-## Gerar o .app instalável / DMG
+### Windows
+
+- **Pelo código-fonte:** com o Node.js instalado, use `npm install && npm start` no `cmd`, PowerShell ou Git Bash.
+- **Um clique:** dê dois cliques em `start.bat` — ele instala as dependências (se faltarem) e abre o app automaticamente.
+- Os terminais abrem no shell padrão do Windows (`cmd.exe`).
+
+### macOS
 
 ```bash
-npm run dist       # gera dist/mac-arm64/maestri-like.app e dist/maestri-like-1.0.0-arm64.dmg
+npm start
 ```
 
-Ou copie `dist/mac-arm64/maestri-like.app` direto para `~/Applications`.
+## Gerar instalável / portátil
+
+Em qualquer plataforma, `npm run dist` gera o pacote do sistema atual:
+
+| Plataforma | Comando | Saída |
+| --- | --- | --- |
+| Windows | `npm run dist` | `dist/maestri-like-1.0.0-portable.exe` (**portátil, roda sem instalar**) e `dist/maestri-like-1.0.0-setup.exe` (instalador, opcional) |
+| macOS | `npm run dist` | `dist/mac-arm64/maestri-like.app` e `dist/maestri-like-1.0.0-arm64.dmg` |
+
+- **Windows — rodar sem instalar:** copie o `portable.exe` para qualquer pasta (até pendrive) e execute direto.
+- **macOS — rodar sem instalar:** copie `dist/mac-arm64/maestri-like.app` para `~/Applications`.
+
+> No Windows o `portable.exe` dispensa o Node.js: é o app completo empacotado.
 
 ## Uso
 
@@ -34,20 +63,32 @@ Ou copie `dist/mac-arm64/maestri-like.app` direto para `~/Applications`.
 | Redimensionar | arrastar a alça no canto inferior direito |
 | Fechar | botão ✕ na barra de título |
 
-Todas as configurações (posição, tamanho, nome e estilo de cada terminal) são persistidas em `~/Library/Application Support/maestri-like/state.json` e restauradas ao reabrir o app.
+Todas as configurações (posição, tamanho, nome e estilo de cada terminal) são persistidas em `state.json` e restauradas ao reabrir o app:
+
+- macOS/Linux: `~/Library/Application Support/maestri-like/state.json`
+- Windows: `%APPDATA%/maestri-like/state.json`
+
+## Scripts npm
+
+| Script | Descrição |
+| --- | --- |
+| `npm start` | abre o app numa janela nativa do Electron |
+| `npm run dist` | empacota o app para a plataforma atual (Windows portátil/instalador ou macOS app/DMG) |
+| `npm install` | `postinstall` baixa o xterm.js (`fetch-vendor.js`) e ajusta permissões do `node-pty` (`fix-pty-perms.js`) |
 
 ## Arquitetura
 
 ```
 electron/main.js             processo principal (janela + IPC + gerenciador de PTYs)
 electron/preload.cjs         ponte segura renderer ↔ main
-electron/terminal-manager.js PTYs e persistência do layout/estilo
+electron/terminal-manager.js PTYs e persistência do layout/estilo (cross-platform: cmd.exe no Windows, $SHELL/zsh no macOS/Linux)
 public/                      frontend (canvas, widgets xterm, painel de configurações)
 public/js/canvas.js          engine de pan/zoom
 public/js/terminal.js        widget de terminal (xterm.js) + personalização
 public/js/main.js            integração, toolbar, atalhos
-scripts/                     fetch do xterm e permissões do node-pty
-build/icon.icns              ícone do app
+scripts/                     fetch do xterm, permissões do node-pty, ícones e assinatura ad-hoc
+build/icon.icns              ícone do app (macOS)
+build/icon.ico               ícone do app (Windows)
 ```
 
 ## Protocolo interno (IPC)

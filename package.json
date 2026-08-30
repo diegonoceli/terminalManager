@@ -7,7 +7,7 @@
   "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder",
+    "dist": "electron-builder && node scripts/sign-app.mjs",
     "postinstall": "node scripts/fetch-vendor.js && node scripts/fix-pty-perms.js"
   },
   "dependencies": {
@@ -34,6 +34,17 @@
       "icon": "build/icon.icns",
       "identity": null
     },
-    "npmRebuild": true
+    "win": {
+      "target": [
+        "portable",
+        "nsis"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "npmRebuild": false
   }
 }

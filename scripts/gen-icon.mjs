@@ -153,7 +153,35 @@ function render(size) {
   return encodePNG(S, S, img);
 }
 
+function encodeICO(images) {
+  const header = Buffer.alloc(6);
+  header.writeUInt16LE(0, 0);
+  header.writeUInt16LE(1, 2);
+  header.writeUInt16LE(images.length, 4);
+  let offset = 6 + 16 * images.length;
+  const entries = [];
+  for (const img of images) {
+    const size = img.width;
+    const entry = Buffer.alloc(16);
+    entry[0] = size === 256 ? 0 : size;
+    entry[1] = size === 256 ? 0 : size;
+    entry[2] = 0;
+    entry[3] = 0;
+    entry.writeUInt16LE(1, 4);
+    entry.writeUInt16LE(32, 6);
+    entry.writeUInt32LE(img.data.length, 8);
+    entry.writeUInt32LE(offset, 12);
+    offset += img.data.length;
+    entries.push(entry);
+  }
+  return Buffer.concat([header, ...entries, ...images.map((i) => i.data)]);
+}
+
 const outDir = new URL("../build/icon-source/", import.meta.url);
 mkdirSync(outDir, { recursive: true });
 writeFileSync(new URL("icon_1024.png", outDir), render(1024));
-console.log("icon_1024.png gerado");
+
+const buildDir = new URL("../build/", import.meta.url);
+const ico = encodeICO([16, 32, 48, 256].map((s) => ({ width: s, data: render(s) })));
+writeFileSync(new URL("icon.ico", buildDir), ico);
+console.log(`icon_1024.png e icon.ico gerados (${ico.length} bytes)`);

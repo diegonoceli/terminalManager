@@ -65,8 +65,13 @@ export class TerminalManager {
     const height = layout.height ?? 400;
     const style = { ...DEFAULT_STYLE, ...(layout.style || {}) };
 
-    const shell = process.env.SHELL || "/bin/zsh";
-    const cwd = process.env.HOME || os.homedir();
+    const isWindows = process.platform === "win32";
+    const shell = isWindows
+      ? process.env.ComSpec || "powershell.exe"
+      : process.env.SHELL || "/bin/zsh";
+    const cwd = isWindows
+      ? process.env.USERPROFILE || os.homedir()
+      : process.env.HOME || os.homedir();
     const env = { ...process.env };
     env.TERM = "xterm-256color";
 
