@@ -73,7 +73,7 @@ function createWindow() {
     height: 900,
     minWidth: 800,
     minHeight: 600,
-    title: "maestri-like",
+    title: "terminal manager",
     backgroundColor: "#f7f7f5",
     webPreferences: {
       preload: join(__dirname, "preload.cjs"),

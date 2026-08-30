@@ -1,7 +1,7 @@
 {
-  "name": "maestri-like",
+  "name": "terminal-manager",
   "version": "1.0.0",
-  "description": "Canvas espacial com terminais PTY multiplos estilo Miro/Maestri (app desktop)",
+  "description": "Canvas espacial com terminais PTY multiplos (app desktop)",
   "author": "diego",
   "type": "module",
   "main": "electron/main.js",
@@ -18,8 +18,8 @@
     "electron-builder": "^24.13.3"
   },
   "build": {
-    "appId": "com.diego.maestrilike",
-    "productName": "maestri-like",
+    "appId": "com.diego.terminalmanager",
+    "productName": "terminal-manager",
     "asar": true,
     "files": [
       "electron/**/*",

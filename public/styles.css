@@ -106,6 +106,12 @@ html, body {
 }
 .btn.primary:hover { background: var(--accent-hover); }
 .btn .icon { font-size: 15px; font-weight: 700; line-height: 1; }
+.btn.toggle.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.btn.toggle.on:hover { background: var(--accent-hover); }
 
 .zoom-readout {
   font-variant-numeric: tabular-nums;

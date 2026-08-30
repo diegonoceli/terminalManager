@@ -12,6 +12,7 @@ const app = {
   ws: null,
   activeId: null,
   newCount: 0,
+  prefs: { focusOnClick: localStorage.getItem("focus-on-click") !== "0" },
 };
 
 /* ---------------- Transporte: Electron IPC ou WebSocket (dev) ---------------- */
@@ -138,6 +139,38 @@ function setActive(id) {
 }
 
 app.setActive = setActive;
+
+/* ---------------- foco ao clicar ---------------- */
+function focusTerminal(w) {
+  if (!w || !app.prefs.focusOnClick) return;
+  const pad = 80;
+  const vw = app.canvas.viewportSize;
+  const to = app.canvas.worldToScreen(w.worldPos.x, w.worldPos.y);
+  const br = app.canvas.worldToScreen(w.worldPos.x + w.worldSize.w, w.worldPos.y + w.worldSize.h);
+  if (to.x >= pad && to.y >= pad && br.x <= vw.w - pad && br.y <= vw.h - pad) return;
+  const cx = (w.worldPos.x + w.worldSize.w / 2) * app.canvas.zoom;
+  const cy = (w.worldPos.y + w.worldSize.h / 2) * app.canvas.zoom;
+  app.canvas.animateTo({
+    tx: vw.w / 2 - cx,
+    ty: vw.h / 2 - cy,
+    zoom: app.canvas.zoom,
+  });
+}
+app.focusTerminal = focusTerminal;
+
+const focusBtn = document.getElementById("btn-focus");
+function syncFocusBtn() {
+  focusBtn.classList.toggle("on", app.prefs.focusOnClick);
+  focusBtn.title = app.prefs.focusOnClick
+    ? "Focar terminal ao clicar (desativar)"
+    : "Focar terminal ao clicar (ativar)";
+}
+focusBtn.addEventListener("click", () => {
+  app.prefs.focusOnClick = !app.prefs.focusOnClick;
+  localStorage.setItem("focus-on-click", app.prefs.focusOnClick ? "1" : "0");
+  syncFocusBtn();
+});
+syncFocusBtn();
 
 /* ---------------- mensagens do widget ---------------- */
 app.sendInput = (id, data) => send({ type: "input", id, data });
@@ -282,4 +315,4 @@ function toast(text) {
 window.toast = toast;
 
 connect();
-window.__maestri = { app, send, createTerminal, fitAll, zoomFit, centerOrigin };
+window.__terminalManager = { app, send, createTerminal, fitAll, zoomFit, centerOrigin };

@@ -1,6 +1,6 @@
-# maestri-like
+# terminal manager
 
-Aplicativo **desktop** (Electron) com canvas espacial estilo Miro/Maestri: uma página infinita onde você posiciona vários terminais **reais** (PTY), cada um com nome preso acima, navega com zoom/pan e personaliza cores, fundo e fonte de cada terminal.
+Aplicativo **desktop** (Electron) com canvas espacial: uma página infinita onde você posiciona vários terminais **reais** (PTY), cada um com nome preso acima, navega com zoom/pan e personaliza cores, fundo e fonte de cada terminal.
 
 ## Requisitos
 
@@ -26,11 +26,13 @@ npm start     # abre o app numa janela nativa do Electron
 - **Um clique:** dê dois cliques em `start.bat` — ele instala as dependências (se faltarem) e abre o app automaticamente.
 - Os terminais abrem no shell padrão do Windows (`cmd.exe`).
 
-### macOS
+### macOS / Linux
 
 ```bash
 npm start
 ```
+
+ou `./start.sh`.
 
 ## Gerar instalável / portátil
 
@@ -38,11 +40,11 @@ Em qualquer plataforma, `npm run dist` gera o pacote do sistema atual:
 
 | Plataforma | Comando | Saída |
 | --- | --- | --- |
-| Windows | `npm run dist` | `dist/maestri-like-1.0.0-portable.exe` (**portátil, roda sem instalar**) e `dist/maestri-like-1.0.0-setup.exe` (instalador, opcional) |
-| macOS | `npm run dist` | `dist/mac-arm64/maestri-like.app` e `dist/maestri-like-1.0.0-arm64.dmg` |
+| Windows | `npm run dist` | `dist/terminal-manager-1.0.0-portable.exe` (**portátil, roda sem instalar**) e `dist/terminal-manager-1.0.0-setup.exe` (instalador, opcional) |
+| macOS | `npm run dist` | `dist/mac-arm64/terminal-manager.app` e `dist/terminal-manager-1.0.0-arm64.dmg` |
 
 - **Windows — rodar sem instalar:** copie o `portable.exe` para qualquer pasta (até pendrive) e execute direto.
-- **macOS — rodar sem instalar:** copie `dist/mac-arm64/maestri-like.app` para `~/Applications`.
+- **macOS — rodar sem instalar:** copie `dist/mac-arm64/terminal-manager.app` para `~/Applications`.
 
 > No Windows o `portable.exe` dispensa o Node.js: é o app completo empacotado.
 
@@ -56,6 +58,7 @@ Em qualquer plataforma, `npm run dist` gera o pacote do sistema atual:
 | Ver tudo (fit) | `V` |
 | Centralizar em (0,0) | `C` |
 | Novo terminal | botão **+ Novo terminal** ou `Cmd/Ctrl N` |
+| **Focar terminal ao clicar** | clicar em um terminal anima o canvas até centralizar ele visível no painel; o botão **Focar** na toolbar liga/desliga essa animação |
 | **Nome preso acima** | clicar em **✎** ou no painel ⚙; o nome fica fixo na barra de cada terminal |
 | **Fundo, cores, fonte** | botão **⚙** na barra do terminal: tema (Escuro/Claro/Verde/Azul/Âmbar), cor de fundo, texto, cursor, barra de título e tamanho da fonte |
 | Fundo do canvas | seletor **Fundo** na toolbar (persiste entre sessões) |
@@ -65,8 +68,8 @@ Em qualquer plataforma, `npm run dist` gera o pacote do sistema atual:
 
 Todas as configurações (posição, tamanho, nome e estilo de cada terminal) são persistidas em `state.json` e restauradas ao reabrir o app:
 
-- macOS/Linux: `~/Library/Application Support/maestri-like/state.json`
-- Windows: `%APPDATA%/maestri-like/state.json`
+- macOS/Linux: `~/Library/Application Support/terminal-manager/state.json`
+- Windows: `%APPDATA%/terminal-manager/state.json`
 
 ## Scripts npm
 
@@ -83,9 +86,9 @@ electron/main.js             processo principal (janela + IPC + gerenciador de P
 electron/preload.cjs         ponte segura renderer ↔ main
 electron/terminal-manager.js PTYs e persistência do layout/estilo (cross-platform: cmd.exe no Windows, $SHELL/zsh no macOS/Linux)
 public/                      frontend (canvas, widgets xterm, painel de configurações)
-public/js/canvas.js          engine de pan/zoom
+public/js/canvas.js          engine de pan/zoom + animação de foco (animateTo)
 public/js/terminal.js        widget de terminal (xterm.js) + personalização
-public/js/main.js            integração, toolbar, atalhos
+public/js/main.js            integração, toolbar, atalhos, foco ao clicar
 scripts/                     fetch do xterm, permissões do node-pty, ícones e assinatura ad-hoc
 build/icon.icns              ícone do app (macOS)
 build/icon.ico               ícone do app (Windows)

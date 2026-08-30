@@ -411,8 +411,14 @@ class TermWidget {
   /* ---- interações ---- */
   _bindEvents() {
     this.el.addEventListener("pointerdown", (e) => {
+      this._dragged = false;
       e.stopPropagation();
       this.app.setActive(this.id);
+    });
+
+    this.el.addEventListener("click", (e) => {
+      if (this._dragged) return;
+      if (this.app.focusTerminal) this.app.focusTerminal(this);
     });
 
     const titlebar = this.el.querySelector(".titlebar");
@@ -421,7 +427,10 @@ class TermWidget {
     const handle = this.el.querySelector(".resize-handle");
     handle.addEventListener("pointerdown", (e) => this._onResizeStart(e));
 
-    this.termHost.addEventListener("click", (e) => e.stopPropagation());
+    this.termHost.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (this.app.focusTerminal) this.app.focusTerminal(this);
+    });
   }
 
   _onDragStart(e) {
@@ -438,6 +447,7 @@ class TermWidget {
 
     const onMove = (ev) => {
       if (ev.pointerId !== pointerId) return;
+      this._dragged = true;
       const d = canvas.screenToWorldDelta(ev.clientX - startSx, ev.clientY - startSy);
       this.setPosition(startWorld.x + d.x, startWorld.y + d.y);
     };
@@ -466,6 +476,7 @@ class TermWidget {
 
     const onMove = (ev) => {
       if (ev.pointerId !== pointerId) return;
+      this._dragged = true;
       const d = canvas.screenToWorldDelta(ev.clientX - startSx, ev.clientY - startSy);
       this.setSize(
         Math.max(MIN_W, startSize.w + d.x),

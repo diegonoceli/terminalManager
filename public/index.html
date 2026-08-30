@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>maestri-like · canvas de terminais</title>
+  <title>terminal manager · canvas de terminais</title>
   <link rel="stylesheet" href="./vendor/xterm.min.css" />
   <link rel="stylesheet" href="./styles.css" />
 </head>
@@ -11,11 +11,15 @@
   <header id="toolbar">
     <div class="brand">
       <span class="logo">⌘</span>
-      <span class="name">maestri-like</span>
+      <span class="name">terminal manager</span>
     </div>
     <div class="tools">
       <button id="btn-new" class="btn primary" title="Criar novo terminal (N)">
         <span class="icon">+</span> Novo terminal
+      </button>
+      <div class="sep"></div>
+      <button id="btn-focus" class="btn toggle" title="Focar terminal ao clicar">
+        <span class="icon">⌖</span> Focar
       </button>
       <div class="sep"></div>
       <button id="btn-zoom-in" class="btn" title="Zoom in (Cmd/Ctrl +)">+</button>

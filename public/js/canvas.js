@@ -54,6 +54,7 @@ class Canvas {
   }
 
   setZoom(z, cx, cy) {
+    this._stopAnim();
     const prev = this.zoom;
     z = Math.min(2.5, Math.max(0.1, z));
     if (cx === undefined) {
@@ -75,19 +76,47 @@ class Canvas {
   }
 
   panBy(dx, dy) {
+    this._stopAnim();
     this.tx += dx;
     this.ty += dy;
     this.apply();
   }
 
   panTo(wx, wy) {
+    this._stopAnim();
     const rect = this.viewport.getBoundingClientRect();
     this.tx = rect.width / 2 - wx * this.zoom;
     this.ty = rect.height / 2 - wy * this.zoom;
     this.apply();
   }
 
+  animateTo(target, opts = {}) {
+    this._stopAnim();
+    const dur = opts.duration ?? 340;
+    const start = { tx: this.tx, ty: this.ty, zoom: this.zoom };
+    const t0 = performance.now();
+    const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+    const step = (now) => {
+      const k = Math.min(1, (now - t0) / dur);
+      const e = ease(k);
+      this.tx = start.tx + (target.tx - start.tx) * e;
+      this.ty = start.ty + (target.ty - start.ty) * e;
+      this.zoom = start.zoom + (target.zoom - start.zoom) * e;
+      this.apply();
+      this._animId = k < 1 ? requestAnimationFrame(step) : null;
+    };
+    this._animId = requestAnimationFrame(step);
+  }
+
+  _stopAnim() {
+    if (this._animId) {
+      cancelAnimationFrame(this._animId);
+      this._animId = null;
+    }
+  }
+
   fitAll(bounds) {
+    this._stopAnim();
     if (!bounds) return;
     const rect = this.viewport.getBoundingClientRect();
     const pad = 60;
