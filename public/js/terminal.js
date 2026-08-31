@@ -107,9 +107,19 @@ class TermWidget {
     const handle = document.createElement("div");
     handle.className = "resize-handle";
 
+    const portRight = document.createElement("div");
+    portRight.className = "conn-port port-right";
+    portRight.title = "Arrastar para conectar a outro terminal";
+
+    const portLeft = document.createElement("div");
+    portLeft.className = "conn-port port-left";
+    portLeft.title = "Ponto de conexão";
+
     el.appendChild(titlebar);
     el.appendChild(host);
     el.appendChild(handle);
+    el.appendChild(portRight);
+    el.appendChild(portLeft);
     return el;
   }
 
@@ -389,6 +399,7 @@ class TermWidget {
     this.worldPos.y = y;
     this.el.style.left = `${x}px`;
     this.el.style.top = `${y}px`;
+    if (this.app.connections) this.app.connections.redrawAll();
   }
 
   setSize(w, h) {
@@ -397,11 +408,13 @@ class TermWidget {
     this.el.style.width = `${w}px`;
     this.el.style.height = `${h}px`;
     this.fit();
+    if (this.app.connections) this.app.connections.redrawAll();
   }
 
   dispose() {
     this.term.dispose();
     this.el.remove();
+    if (this.app.connections) this.app.connections.redrawAll();
   }
 
   get dims() {
@@ -427,13 +440,23 @@ class TermWidget {
     const handle = this.el.querySelector(".resize-handle");
     handle.addEventListener("pointerdown", (e) => this._onResizeStart(e));
 
+    const portRight = this.el.querySelector(".conn-port.port-right");
+    if (portRight) {
+      portRight.addEventListener("pointerdown", (e) => {
+        e.stopPropagation();
+        if (this.app.connections) {
+          this.app.connections.startDrag(this.id, e.clientX, e.clientY);
+        }
+      });
+    }
+
     this.termHost.addEventListener("click", (e) => {
       e.stopPropagation();
       if (this.app.focusTerminal) this.app.focusTerminal(this);
     });
 
-    this.el.addEventListener("mouseenter", () => this._hovered = true);
-    this.el.addEventListener("mouseleave", () => this._hovered = false);
+    this.el.addEventListener("mouseenter", () => (this._hovered = true));
+    this.el.addEventListener("mouseleave", () => (this._hovered = false));
     this.el.addEventListener("wheel", (e) => {
       if (this.isActive() || this._hovered) {
         e.stopPropagation();

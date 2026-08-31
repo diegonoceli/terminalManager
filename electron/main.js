@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, Notification } from "electron";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { TerminalManager } from "./terminal-manager.js";
@@ -7,6 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 let manager = null;
 const windows = new Set();
+let mainWindow = null;
 
 function broadcast(msg) {
   const payload = JSON.stringify(msg);
@@ -17,13 +18,41 @@ function broadcast(msg) {
   }
 }
 
+function showNotification({ id, title, body }) {
+  if (!Notification.isSupported()) return;
+
+  const notif = new Notification({
+    title: title || "Terminal Manager",
+    body: body || "Atividade no terminal concluída.",
+    silent: false,
+  });
+
+  notif.on("click", () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+      broadcast({ type: "focus_terminal", id });
+    }
+  });
+
+  notif.show();
+}
+
 function handleMessage(msg) {
   if (!msg || typeof msg.type !== "string") return;
   switch (msg.type) {
     case "layout_request":
       for (const win of windows) {
         if (!win.isDestroyed()) {
-          win.webContents.send("msg", JSON.stringify({ type: "layout", terminals: manager.list() }));
+          win.webContents.send(
+            "msg",
+            JSON.stringify({
+              type: "layout",
+              terminals: manager.list(),
+              connections: manager.listConnections(),
+            })
+          );
         }
       }
       break;
@@ -62,6 +91,25 @@ function handleMessage(msg) {
         broadcast({ type: "killed", id: msg.id });
       }
       break;
+    case "create_connection": {
+      const conn = manager.addConnection(msg);
+      if (conn) {
+        broadcast({ type: "connection_created", connection: conn });
+      }
+      break;
+    }
+    case "remove_connection":
+      if (manager.removeConnection(msg.id)) {
+        broadcast({ type: "connection_removed", id: msg.id });
+      }
+      break;
+    case "notify":
+      showNotification({
+        id: msg.terminalId,
+        title: msg.title,
+        body: msg.body,
+      });
+      break;
     default:
       break;
   }
@@ -84,15 +132,24 @@ function createWindow() {
   });
   win.removeMenu();
   windows.add(win);
-  win.on("closed", () => windows.delete(win));
+  mainWindow = win;
+  win.on("closed", () => {
+    windows.delete(win);
+    if (mainWindow === win) mainWindow = null;
+  });
   win.loadFile(join(__dirname, "..", "public", "index.html"));
 }
 
 app.whenReady().then(() => {
+  if (process.platform === "win32") {
+    app.setAppUserModelId("com.diego.terminalmanager");
+  }
+
   manager = new TerminalManager({
     stateFile: join(app.getPath("userData"), "state.json"),
   });
   manager.setBroadcast(broadcast);
+  manager.setNotify(showNotification);
   manager.restore();
 
   ipcMain.on("msg", (event, payload) => {

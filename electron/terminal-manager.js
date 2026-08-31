@@ -21,21 +21,44 @@ export class TerminalManager {
   constructor({ stateFile }) {
     this.STATE_FILE = stateFile;
     this.terminals = new Map();
-    this.layout = this.loadLayout();
+    this.connections = new Map();
+    const saved = this.loadLayout();
+    this.savedTerminals = saved.terminals || [];
+    this.savedConnections = saved.connections || [];
     this.broadcast = null;
+    this.notifyCallback = null;
+    this.lastNotifyTimes = new Map();
   }
 
   setBroadcast(fn) {
     this.broadcast = fn;
   }
 
+  setNotify(fn) {
+    this.notifyCallback = fn;
+  }
+
+  sendNotification(terminalId, title, body) {
+    const now = Date.now();
+    const last = this.lastNotifyTimes.get(terminalId) || 0;
+    if (now - last < 2000) return; // Debounce 2s per terminal
+    this.lastNotifyTimes.set(terminalId, now);
+
+    if (this.notifyCallback) {
+      this.notifyCallback({ id: terminalId, title, body });
+    }
+  }
+
   loadLayout() {
-    if (!this.STATE_FILE || !existsSync(this.STATE_FILE)) return [];
+    if (!this.STATE_FILE || !existsSync(this.STATE_FILE)) return { terminals: [], connections: [] };
     try {
       const data = JSON.parse(readFileSync(this.STATE_FILE, "utf8"));
-      return Array.isArray(data.terminals) ? data.terminals : [];
+      return {
+        terminals: Array.isArray(data.terminals) ? data.terminals : [],
+        connections: Array.isArray(data.connections) ? data.connections : [],
+      };
     } catch {
-      return [];
+      return { terminals: [], connections: [] };
     }
   }
 
@@ -53,7 +76,8 @@ export class TerminalManager {
       rows: t.rows,
       style: t.style,
     }));
-    writeFileSync(this.STATE_FILE, JSON.stringify({ terminals }, null, 2));
+    const connections = [...this.connections.values()];
+    writeFileSync(this.STATE_FILE, JSON.stringify({ terminals, connections }, null, 2));
   }
 
   create(layout = {}) {
@@ -98,17 +122,40 @@ export class TerminalManager {
       proc,
     };
 
+    let bufferAccumulator = "";
     proc.onData((data) => {
       if (this.broadcast) {
         this.broadcast({ type: "output", id, data });
       }
+
+      // Check for prompt or completion patterns requiring approval/input
+      bufferAccumulator = (bufferAccumulator + data).slice(-500);
+      const lower = bufferAccumulator.toLowerCase();
+      if (
+        lower.includes("[y/n]") ||
+        lower.includes("(y/n)") ||
+        lower.includes("approve?") ||
+        lower.includes("allow [y/n]") ||
+        lower.includes("press enter to continue") ||
+        lower.includes("password:")
+      ) {
+        this.sendNotification(id, title, "Comando aguardando aprovação/interação.");
+        bufferAccumulator = "";
+      }
     });
+
     proc.onExit(({ exitCode }) => {
       this.terminals.delete(id);
+      this.removeTerminalConnections(id);
       this.saveLayout();
       if (this.broadcast) {
         this.broadcast({ type: "exited", id, exitCode });
       }
+      this.sendNotification(
+        id,
+        title,
+        exitCode === 0 ? "Processo finalizado com sucesso." : `Processo finalizado com código ${exitCode}.`
+      );
     });
 
     this.terminals.set(id, term);
@@ -117,12 +164,18 @@ export class TerminalManager {
   }
 
   restore() {
-    const restored = this.layout.filter((l) => l.id);
+    const restored = this.savedTerminals.filter((l) => l.id);
     for (const layout of restored) {
       try {
         this.create(layout);
       } catch (e) {
         console.error("Falha ao restaurar terminal:", e.message);
+      }
+    }
+    // Restore connections
+    for (const conn of this.savedConnections) {
+      if (conn.id && conn.from && conn.to) {
+        this.connections.set(conn.id, conn);
       }
     }
   }
@@ -151,6 +204,43 @@ export class TerminalManager {
 
   list() {
     return [...this.terminals.values()].map((t) => this.serialize(t));
+  }
+
+  listConnections() {
+    return [...this.connections.values()];
+  }
+
+  addConnection({ from, to, label = "" }) {
+    if (!from || !to || from === to) return null;
+    // Check if already exists
+    for (const conn of this.connections.values()) {
+      if (conn.from === from && conn.to === to) return conn;
+    }
+    const id = `conn_${randomUUID().slice(0, 8)}`;
+    const conn = { id, from, to, label };
+    this.connections.set(id, conn);
+    this.saveLayout();
+    return conn;
+  }
+
+  removeConnection(id) {
+    const removed = this.connections.delete(id);
+    if (removed) this.saveLayout();
+    return removed;
+  }
+
+  removeTerminalConnections(terminalId) {
+    let changed = false;
+    for (const [cid, conn] of this.connections.entries()) {
+      if (conn.from === terminalId || conn.to === terminalId) {
+        this.connections.delete(cid);
+        changed = true;
+        if (this.broadcast) {
+          this.broadcast({ type: "connection_removed", id: cid });
+        }
+      }
+    }
+    if (changed) this.saveLayout();
   }
 
   get(id) {
