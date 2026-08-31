@@ -57,7 +57,7 @@ export class TerminalManager {
   }
 
   create(layout = {}) {
-    const id = randomUUID();
+    const id = layout.id || randomUUID();
     const title = layout.title || `Terminal ${this.terminals.size + 1}`;
     const x = layout.x ?? 80;
     const y = layout.y ?? 80;
