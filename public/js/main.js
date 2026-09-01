@@ -68,9 +68,22 @@ function handleMessage(msg) {
       if (app.connections) {
         app.connections.setConnections(msg.connections || []);
       }
+      setTimeout(() => {
+        if (app.widgets.size > 0) {
+          fitAll();
+        } else {
+          centerOrigin();
+        }
+        for (const w of app.widgets.values()) {
+          w.fit();
+        }
+      }, 60);
       break;
     case "created":
       ensureWidget(msg.terminal, true);
+      if (app.widgets.size === 1) {
+        setTimeout(fitAll, 60);
+      }
       break;
     case "output":
       app.widgets.get(msg.id)?.write(msg.data);
@@ -120,7 +133,7 @@ function syncLayout(list) {
   const seen = new Set();
   for (const t of list) {
     seen.add(t.id);
-    const w = ensureWidget(t, false);
+    const w = ensureWidget(t, true);
     if (w) {
       w.setPosition(t.x, t.y);
       w.setSize(t.width, t.height);

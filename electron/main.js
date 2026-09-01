@@ -146,6 +146,16 @@ function createWindow() {
     windows.delete(win);
     if (mainWindow === win) mainWindow = null;
   });
+
+  win.webContents.on("before-input-event", (event, input) => {
+    if (
+      input.key === "F12" ||
+      ((input.control || input.meta) && input.alt && input.key.toLowerCase() === "i")
+    ) {
+      win.webContents.toggleDevTools();
+    }
+  });
+
   win.loadFile(join(__dirname, "..", "public", "index.html"));
 }
 
