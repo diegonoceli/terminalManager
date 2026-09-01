@@ -15,6 +15,8 @@ const app = {
   prefs: { focusOnClick: localStorage.getItem("focus-on-click") !== "0" },
 };
 
+app.connections = new ConnectionsManager(app);
+
 /* ---------------- Transporte: Electron IPC ou WebSocket (dev) ---------------- */
 const useBridge = !!window.appBridge;
 
@@ -63,12 +65,18 @@ function handleMessage(msg) {
   switch (msg.type) {
     case "layout":
       syncLayout(msg.terminals || []);
+      if (app.connections) {
+        app.connections.setConnections(msg.connections || []);
+      }
       break;
     case "created":
       ensureWidget(msg.terminal, true);
       break;
     case "output":
       app.widgets.get(msg.id)?.write(msg.data);
+      if (app.connections) {
+        app.connections.triggerPulse(msg.id);
+      }
       break;
     case "moved": {
       const w = app.widgets.get(msg.id);
@@ -85,6 +93,24 @@ function handleMessage(msg) {
     case "exited":
       removeWidget(msg.id);
       break;
+    case "connection_created":
+      if (app.connections) {
+        app.connections.add(msg.connection);
+      }
+      break;
+    case "connection_removed":
+      if (app.connections) {
+        app.connections.remove(msg.id);
+      }
+      break;
+    case "focus_terminal": {
+      const w = app.widgets.get(msg.id);
+      if (w) {
+        setActive(msg.id);
+        focusTerminal(w, true); // force focus and center
+      }
+      break;
+    }
     default:
       break;
   }
@@ -118,6 +144,7 @@ function ensureWidget(t, doFit) {
   if (doFit) w.fit();
   return w;
 }
+
 function removeWidget(id) {
   const w = app.widgets.get(id);
   if (w) {
@@ -125,6 +152,7 @@ function removeWidget(id) {
     app.widgets.delete(id);
   }
   if (app.activeId === id) app.activeId = null;
+  if (app.connections) app.connections.redrawAll();
   fitMaybe();
 }
 
@@ -140,14 +168,15 @@ function setActive(id) {
 
 app.setActive = setActive;
 
-/* ---------------- foco ao clicar ---------------- */
-function focusTerminal(w) {
-  if (!w || !app.prefs.focusOnClick) return;
+/* ---------------- foco ao clicar ou alerta ---------------- */
+function focusTerminal(w, force = false) {
+  if (!w) return;
+  if (!force && !app.prefs.focusOnClick) return;
   const pad = 80;
   const vw = app.canvas.viewportSize;
   const to = app.canvas.worldToScreen(w.worldPos.x, w.worldPos.y);
   const br = app.canvas.worldToScreen(w.worldPos.x + w.worldSize.w, w.worldPos.y + w.worldSize.h);
-  if (to.x >= pad && to.y >= pad && br.x <= vw.w - pad && br.y <= vw.h - pad) return;
+  if (!force && to.x >= pad && to.y >= pad && br.x <= vw.w - pad && br.y <= vw.h - pad) return;
   const cx = (w.worldPos.x + w.worldSize.w / 2) * app.canvas.zoom;
   const cy = (w.worldPos.y + w.worldSize.h / 2) * app.canvas.zoom;
   app.canvas.animateTo({
@@ -172,7 +201,7 @@ focusBtn.addEventListener("click", () => {
 });
 syncFocusBtn();
 
-/* ---------------- mensagens do widget ---------------- */
+/* ---------------- mensagens do widget & conexões ---------------- */
 app.sendInput = (id, data) => send({ type: "input", id, data });
 app.sendResize = (id, cols, rows, width, height) =>
   send({ type: "resize", id, cols, rows, width, height });
@@ -180,6 +209,13 @@ app.sendMove = (id, x, y) => send({ type: "move", id, x, y });
 app.sendRename = (id, title) => send({ type: "rename", id, title });
 app.sendStyle = (id, style) => send({ type: "style", id, style });
 app.requestKill = (id) => send({ type: "kill", id });
+app.sendCreateConnection = (data) => send({ type: "create_connection", ...data });
+app.sendRemoveConnection = (id) => send({ type: "remove_connection", id });
+app.openExternal = (url) => send({ type: "open_external", url });
+
+// Prevent Electron from opening dropped files in the window
+window.addEventListener("dragover", (e) => e.preventDefault(), false);
+window.addEventListener("drop", (e) => e.preventDefault(), false);
 
 app.closeAllSettings = () => {
   for (const w of app.widgets.values()) w.closeSettings();

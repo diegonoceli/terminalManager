@@ -107,9 +107,19 @@ class TermWidget {
     const handle = document.createElement("div");
     handle.className = "resize-handle";
 
+    const portRight = document.createElement("div");
+    portRight.className = "conn-port port-right";
+    portRight.title = "Arrastar para conectar a outro terminal";
+
+    const portLeft = document.createElement("div");
+    portLeft.className = "conn-port port-left";
+    portLeft.title = "Ponto de conexão";
+
     el.appendChild(titlebar);
     el.appendChild(host);
     el.appendChild(handle);
+    el.appendChild(portRight);
+    el.appendChild(portLeft);
     return el;
   }
 
@@ -119,6 +129,63 @@ class TermWidget {
     this.termHost.appendChild(hostDiv);
     this.term.open(hostDiv);
     this.term.loadAddon(this.fitAddon);
+
+    // Register Link Provider for clickable URLs and localhost
+    if (typeof this.term.registerLinkProvider === "function") {
+      const urlRegex = /(https?:\/\/[^\s"'`<>]+|localhost:[0-9]+[^\s"'`<>]*)/gi;
+      this.term.registerLinkProvider({
+        provideLinks: (bufferLineNumber, callback) => {
+          const line = this.term.buffer.active.getLine(bufferLineNumber - 1);
+          if (!line) return callback([]);
+          const text = line.translateToString(true);
+          const links = [];
+          let match;
+          urlRegex.lastIndex = 0;
+          while ((match = urlRegex.exec(text)) !== null) {
+            let uri = match[0];
+            if (uri.startsWith("localhost:")) uri = "http://" + uri;
+            links.push({
+              range: {
+                start: { x: match.index + 1, y: bufferLineNumber },
+                end: { x: match.index + match[0].length, y: bufferLineNumber },
+              },
+              text: uri,
+              activate: (e, text) => {
+                if (this.app.openExternal) {
+                  this.app.openExternal(text);
+                } else {
+                  window.open(text, "_blank");
+                }
+              },
+            });
+          }
+          callback(links);
+        },
+      });
+    }
+
+    // Attach custom key handler for reliable Ctrl+V / Cmd+V paste
+    this.term.attachCustomKeyEventHandler((e) => {
+      if (e.type === "keydown") {
+        const isPaste =
+          (e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "v") ||
+          (e.metaKey && !e.ctrlKey && e.key.toLowerCase() === "v") ||
+          (e.shiftKey && e.key === "Insert");
+
+        if (isPaste) {
+          e.preventDefault();
+          navigator.clipboard
+            .readText()
+            .then((text) => {
+              if (text) this.app.sendInput(this.id, text);
+            })
+            .catch(() => {});
+          return false;
+        }
+      }
+      return true;
+    });
+
     this.term.onData((data) => this.app.sendInput(this.id, data));
     this.term.onResize(({ cols, rows }) => {
       this.app.sendResize(this.id, cols, rows, this.worldSize.w, this.worldSize.h);
@@ -389,6 +456,7 @@ class TermWidget {
     this.worldPos.y = y;
     this.el.style.left = `${x}px`;
     this.el.style.top = `${y}px`;
+    if (this.app.connections) this.app.connections.redrawAll();
   }
 
   setSize(w, h) {
@@ -397,11 +465,13 @@ class TermWidget {
     this.el.style.width = `${w}px`;
     this.el.style.height = `${h}px`;
     this.fit();
+    if (this.app.connections) this.app.connections.redrawAll();
   }
 
   dispose() {
     this.term.dispose();
     this.el.remove();
+    if (this.app.connections) this.app.connections.redrawAll();
   }
 
   get dims() {
@@ -427,18 +497,94 @@ class TermWidget {
     const handle = this.el.querySelector(".resize-handle");
     handle.addEventListener("pointerdown", (e) => this._onResizeStart(e));
 
+    const portRight = this.el.querySelector(".conn-port.port-right");
+    if (portRight) {
+      portRight.addEventListener("pointerdown", (e) => {
+        e.stopPropagation();
+        if (this.app.connections) {
+          this.app.connections.startDrag(this.id, e.clientX, e.clientY);
+        }
+      });
+    }
+
     this.termHost.addEventListener("click", (e) => {
       e.stopPropagation();
       if (this.app.focusTerminal) this.app.focusTerminal(this);
     });
 
-    this.el.addEventListener("mouseenter", () => this._hovered = true);
-    this.el.addEventListener("mouseleave", () => this._hovered = false);
+    this.el.addEventListener("mouseenter", () => (this._hovered = true));
+    this.el.addEventListener("mouseleave", () => (this._hovered = false));
     this.el.addEventListener("wheel", (e) => {
       if (this.isActive() || this._hovered) {
         e.stopPropagation();
       }
     }, { passive: false });
+
+    // Right-click paste support
+    this.termHost.addEventListener("contextmenu", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          this.app.setActive(this.id);
+          this.app.sendInput(this.id, text);
+        }
+      } catch (err) {
+        console.error("Erro ao colar do clipboard:", err);
+      }
+    });
+
+    // Native Drag & Drop for Files and Folders (Windows & macOS)
+    let dragCounter = 0;
+    this.el.addEventListener("dragenter", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounter++;
+      this.el.classList.add("drag-over");
+    });
+
+    this.el.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = "copy";
+      this.el.classList.add("drag-over");
+    });
+
+    this.el.addEventListener("dragleave", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounter--;
+      if (dragCounter <= 0) {
+        dragCounter = 0;
+        this.el.classList.remove("drag-over");
+      }
+    });
+
+    this.el.addEventListener("drop", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounter = 0;
+      this.el.classList.remove("drag-over");
+
+      let textToInsert = "";
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        const files = Array.from(e.dataTransfer.files);
+        const paths = files.map((f) => {
+          const p = f.path || f.name;
+          // Wrap paths containing spaces in double quotes
+          return p.includes(" ") ? `"${p}"` : p;
+        });
+        textToInsert = paths.join(" ");
+      } else {
+        textToInsert = e.dataTransfer.getData("text");
+      }
+
+      if (textToInsert) {
+        this.app.setActive(this.id);
+        this.app.sendInput(this.id, textToInsert);
+      }
+    });
   }
 
   _onDragStart(e) {
