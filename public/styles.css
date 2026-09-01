@@ -504,3 +504,16 @@ html, body {
   pointer-events: none;
 }
 
+/* Drop target highlight for widgets */
+.widget.drag-over {
+  border-color: #06b6d4 !important;
+  box-shadow: 0 0 25px rgba(6, 182, 212, 0.5), var(--shadow) !important;
+  transform: scale(1.01);
+  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+}
+
+.widget.drag-over .term-host {
+  outline: 2px dashed #06b6d4;
+  outline-offset: -4px;
+}
+
