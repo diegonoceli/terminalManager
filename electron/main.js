@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Notification } from "electron";
+import { app, BrowserWindow, ipcMain, Notification, shell } from "electron";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { TerminalManager } from "./terminal-manager.js";
@@ -109,6 +109,15 @@ function handleMessage(msg) {
         title: msg.title,
         body: msg.body,
       });
+      break;
+    case "open_external":
+      if (msg.url && typeof msg.url === "string") {
+        try {
+          shell.openExternal(msg.url);
+        } catch (err) {
+          console.error("Erro ao abrir URL externa:", err);
+        }
+      }
       break;
     default:
       break;

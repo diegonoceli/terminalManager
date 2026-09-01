@@ -211,6 +211,11 @@ app.sendStyle = (id, style) => send({ type: "style", id, style });
 app.requestKill = (id) => send({ type: "kill", id });
 app.sendCreateConnection = (data) => send({ type: "create_connection", ...data });
 app.sendRemoveConnection = (id) => send({ type: "remove_connection", id });
+app.openExternal = (url) => send({ type: "open_external", url });
+
+// Prevent Electron from opening dropped files in the window
+window.addEventListener("dragover", (e) => e.preventDefault(), false);
+window.addEventListener("drop", (e) => e.preventDefault(), false);
 
 app.closeAllSettings = () => {
   for (const w of app.widgets.values()) w.closeSettings();
