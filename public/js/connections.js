@@ -1,6 +1,6 @@
 // Spatial connections layer for Terminal Manager (Maestri-style agent connections)
 
-export class ConnectionsManager {
+class ConnectionsManager {
   constructor(app) {
     this.app = app;
     this.svg = document.getElementById("connections-layer");
