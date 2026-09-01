@@ -431,6 +431,14 @@ class TermWidget {
       e.stopPropagation();
       if (this.app.focusTerminal) this.app.focusTerminal(this);
     });
+
+    this.el.addEventListener("mouseenter", () => this._hovered = true);
+    this.el.addEventListener("mouseleave", () => this._hovered = false);
+    this.el.addEventListener("wheel", (e) => {
+      if (this.isActive() || this._hovered) {
+        e.stopPropagation();
+      }
+    }, { passive: false });
   }
 
   _onDragStart(e) {
