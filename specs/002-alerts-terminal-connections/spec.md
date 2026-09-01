@@ -27,9 +27,9 @@ Como usuário executando tarefas demoradas ou comandos em segundo plano, quero r
 
 ### User Story 2 - Linhas de Conexão Visuais entre Terminais no Canvas (Priority: P1)
 
-Como usuário gerenciando múltiplos terminais e agentes que colaboram entre si (estilo Maestri), quero ver linhas visuais (curvas/conectores) desenhadas no canvas conectando os terminais que estão se comunicando ou compartilhando tarefas, para entender claramente a topologia e o fluxo de dados entre os agentes.
+Como usuário gerenciando múltiplos terminais e agentes que colaboram entre si, quero ver linhas visuais (curvas/conectores) desenhadas no canvas conectando os terminais que estão se comunicando ou compartilhando tarefas, para entender claramente a topologia e o fluxo de dados entre os agentes.
 
-**Why this priority**: É a funcionalidade central de experiência espacial visual inspirada no Maestri para coordenação multi-agente.
+**Why this priority**: É a funcionalidade central de experiência espacial visual para coordenação multi-agente.
 
 **Independent Test**: Definir ou disparar uma comunicação entre dois terminais e verificar que uma linha conectora é desenhada entre os dois blocos no canvas, acompanhando movimentações e zoom.
 

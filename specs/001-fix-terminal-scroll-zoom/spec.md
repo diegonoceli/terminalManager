@@ -82,6 +82,6 @@ Como usuário, quero que as sessões dos meus terminais sejam salvas automaticam
 
 ## Assumptions
 
-- Assumimos que existe um evento global ou de parent component que está capturando o scroll e convertendo em zoom (ex: behavior padrão do Maestri canvas).
+- Assumimos que existe um evento global ou de parent component que está capturando o scroll e convertendo em zoom.
 - Assumimos que o zoom intencional através de botões de UI ou atalhos de teclado (ex: Ctrl/Cmd + e Ctrl/Cmd -) continua funcionando normalmente.
 - Assumimos que a restauração da sessão do terminal se limita a restaurar os componentes de interface do terminal e seus diretórios base. Se for impossível restaurar o processo exato (ex. um servidor dev rodando), um novo shell limpo no mesmo diretório será considerado sucesso.

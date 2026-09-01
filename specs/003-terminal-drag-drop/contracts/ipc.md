@@ -8,6 +8,6 @@ Requests the Electron main process to open a URL safely in the system default we
 ```json
 {
   "type": "open_external",
-  "url": "https://www.themaestri.app"
+  "url": "https://github.com"
 }
 ```

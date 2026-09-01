@@ -1,4 +1,4 @@
-// Spatial connections layer for Terminal Manager (Maestri-style agent connections)
+// Spatial connections layer for Terminal Manager (Canvas de terminais)
 
 class ConnectionsManager {
   constructor(app) {
