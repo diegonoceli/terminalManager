@@ -24,6 +24,25 @@ class Canvas {
     this.viewport.addEventListener("wheel", (e) => this._onWheel(e), { passive: false });
     this.viewport.addEventListener("click", (e) => this._onClick(e));
     this.viewport.addEventListener("dblclick", (e) => this._onDblClick(e));
+
+    window.addEventListener("keydown", (e) => {
+      if (e.code === "Space" && !this._isEditingText(e.target) && !this._spacePressed) {
+        this._spacePressed = true;
+        this.viewport.classList.add("space-grab");
+      }
+    });
+    window.addEventListener("keyup", (e) => {
+      if (e.code === "Space") {
+        this._spacePressed = false;
+        this.viewport.classList.remove("space-grab");
+      }
+    });
+  }
+
+  _isEditingText(target) {
+    if (!target) return false;
+    const tag = target.tagName;
+    return tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable || target.closest(".xterm");
   }
 
   /* ---- transform helpers ---- */
@@ -32,6 +51,11 @@ class Canvas {
     const gs = this.gridSize * this.zoom;
     this.grid.style.backgroundSize = `${gs}px ${gs}px`;
     this.grid.style.backgroundPosition = `${this.tx}px ${this.ty}px`;
+
+    // Dynamic dot alpha and sizing for elegant Liquid Glass dot grid
+    const dotAlpha = Math.min(0.22, Math.max(0.06, 0.14 * Math.min(this.zoom, 1.2)));
+    this.grid.style.setProperty("--canvas-dot-color", `rgba(255, 255, 255, ${dotAlpha})`);
+
     if (this.onZoom) this.onZoom(this.zoom);
   }
 
@@ -153,13 +177,17 @@ class Canvas {
 
   /* ---- pan by dragging empty canvas ---- */
   _onPointerDown(e) {
-    if (e.target !== this.viewport && e.target !== this.grid) return;
+    const isBg = (e.target === this.viewport || e.target === this.grid || e.target.id === "connections-layer");
+    const isSpaceOrMiddle = e.button === 1 || this._spacePressed;
+    if (!isBg && !isSpaceOrMiddle) return;
     if (e.button !== 0 && e.button !== 1) return;
     this._panning = true;
     this._lastX = e.clientX;
     this._lastY = e.clientY;
     this.viewport.classList.add("panning");
-    this.viewport.setPointerCapture(e.pointerId);
+    try {
+      this.viewport.setPointerCapture(e.pointerId);
+    } catch {}
     this._panPointerId = e.pointerId;
   }
 

@@ -25,6 +25,13 @@ app.nodes = app.widgets; // Alias for universal nodes
 app.connections = new ConnectionsManager(app);
 window.app = app;
 
+if (typeof FloatingDock === "function") {
+  app.floatingDock = new FloatingDock(document.body, app);
+}
+if (typeof PromptComposer === "function") {
+  app.promptComposer = new PromptComposer(world, app);
+}
+
 app.motion = {
   isReduced() {
     const saved = localStorage.getItem("reduced-motion");
@@ -425,6 +432,16 @@ function removeWidget(id, skipSend = false) {
   fitMaybe();
 }
 
+let _topZIndex = 10;
+
+function bringNodeToFront(w) {
+  if (!w || !w.el) return;
+  _topZIndex += 1;
+  w.el.style.zIndex = _topZIndex;
+}
+
+app.bringNodeToFront = bringNodeToFront;
+
 /* ---------------- ativação ---------------- */
 function setActive(id) {
   for (const [wid, w] of app.widgets) {
@@ -432,7 +449,15 @@ function setActive(id) {
   }
   app.activeId = id;
   const w = app.widgets.get(id);
-  if (w && typeof w.focus === "function") w.focus();
+  if (w) {
+    bringNodeToFront(w);
+    if (typeof w.focus === "function") w.focus();
+    if (app.promptComposer && typeof app.promptComposer.attachTo === "function") {
+      app.promptComposer.attachTo(w);
+    }
+  } else if (app.promptComposer && typeof app.promptComposer.detach === "function") {
+    app.promptComposer.detach();
+  }
 }
 
 app.setActive = setActive;
@@ -1434,6 +1459,9 @@ function setConn(ok) {
   }
   if (connText) {
     connText.textContent = ok ? "conectado" : "desconectado";
+  }
+  if (app.floatingDock) {
+    app.floatingDock.updateStatus(ok, ok ? "conectado" : "desconectado");
   }
 }
 

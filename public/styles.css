@@ -1,16 +1,41 @@
 :root {
-  --bg: #f7f7f5;
-  --panel: #ffffff;
-  --panel-border: #dcdcd8;
-  --text: #1f1f1e;
-  --muted: #75756f;
-  --accent: #4f46e5;
-  --accent-hover: #4338ca;
-  --danger: #dc2626;
-  --titlebar: #f0f0ee;
-  --shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
-  --radius: 10px;
-  --toolbar-h: 52px;
+  /* Spatial Canvas Base (Dark Mode default) */
+  --canvas-bg: #090b10;
+  --bg: #090b10;
+  --panel: rgba(18, 22, 31, 0.75);
+  --panel-border: rgba(255, 255, 255, 0.12);
+  --text: #f3f4f6;
+  --muted: #94a3b8;
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --danger: #ef4444;
+  --titlebar: rgba(26, 32, 44, 0.65);
+  --shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --radius: 16px;
+  --radius-xl: 20px;
+  --radius-pill: 9999px;
+  --toolbar-h: 0px;
+
+  /* Liquid Glass Surface (macOS Dark) */
+  --glass-bg: rgba(18, 22, 31, 0.72);
+  --glass-bg-hover: rgba(26, 32, 44, 0.82);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-border-focus: rgba(99, 102, 241, 0.65);
+  --glass-blur: 24px;
+  --glass-saturate: 180%;
+  --glass-specular: inset 0 1px 1px 0 rgba(255, 255, 255, 0.15);
+  --glass-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --glass-shadow-elevated: 0 30px 60px -15px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.2);
+
+  /* Dot Grid Pattern */
+  --canvas-dot-color: rgba(255, 255, 255, 0.14);
+  --canvas-dot-size: 1.2px;
+  --canvas-grid-spacing: 24px;
+
+  /* macOS Traffic Light Colors */
+  --traffic-close: #ff5f56;
+  --traffic-minimize: #ffbd2e;
+  --traffic-maximize: #27c93f;
 }
 
 * { box-sizing: border-box; }
@@ -25,14 +50,14 @@ html, body {
   background: var(--bg);
 }
 
-/* ---------- Toolbar ---------- */
+/* ---------- Legacy Toolbar (Hidden in favor of Floating macOS Dock) ---------- */
 #toolbar {
+  display: none !important;
   position: fixed;
   top: 0; left: 0; right: 0;
-  height: var(--toolbar-h);
-  display: flex;
-  align-items: center;
-  gap: 14px;
+  height: 0;
+  pointer-events: none;
+  visibility: hidden;
   padding: 0 14px;
   background: var(--panel);
   border-bottom: 1px solid var(--panel-border);
@@ -140,7 +165,7 @@ html, body {
 /* ---------- Viewport / canvas ---------- */
 #viewport {
   position: fixed;
-  top: var(--toolbar-h); left: 0; right: 0; bottom: 0;
+  inset: 0;
   overflow: hidden;
   background: var(--bg);
   cursor: grab;
@@ -152,10 +177,10 @@ html, body {
   inset: 0;
   pointer-events: none;
   background-image:
-    radial-gradient(circle, #d8d8d4 1.2px, transparent 1.2px);
-  background-size: 24px 24px;
+    radial-gradient(circle, var(--canvas-dot-color) var(--canvas-dot-size), transparent var(--canvas-dot-size));
+  background-size: var(--canvas-grid-spacing) var(--canvas-grid-spacing);
   background-repeat: repeat;
-  opacity: 0.7;
+  opacity: 0.85;
 }
 
 #world {
@@ -166,46 +191,90 @@ html, body {
   will-change: transform;
 }
 
-/* ---------- Widget de terminal ---------- */
+/* ---------- Liquid Glass Widget Base ---------- */
 .widget {
   position: absolute;
   display: flex;
   flex-direction: column;
-  background: var(--panel);
-  border: 1px solid var(--panel-border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  box-shadow: var(--glass-shadow);
   overflow: hidden;
-  min-width: 220px;
+  min-width: 240px;
   min-height: 150px;
-  --tb-bg: #f0f0ee;
-  --tb-fg: #1f1f1e;
+  --tb-bg: rgba(22, 27, 38, 0.75);
+  --tb-fg: #f3f4f6;
   --tb-fs: 12.5px;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.15s ease, opacity 0.15s ease;
 }
 .widget.active {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.25), var(--shadow);
+  border-color: var(--glass-border-focus);
+  box-shadow: 0 0 0 1px var(--glass-border-focus), 0 25px 60px -10px rgba(0, 0, 0, 0.75);
+}
+.widget.dragging {
+  opacity: 0.88;
+  transform: scale(1.015);
+  box-shadow: var(--glass-shadow-elevated);
+  cursor: grabbing !important;
 }
 
 .widget .titlebar {
   flex: 0 0 auto;
-  height: 30px;
+  height: 34px;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 4px 0 12px;
+  padding: 0 8px 0 12px;
   background: var(--tb-bg);
   color: var(--tb-fg);
-  border-bottom: 1px solid var(--panel-border);
+  border-bottom: 1px solid var(--glass-border);
   cursor: grab;
   user-select: none;
   touch-action: none;
 }
 .widget.active .titlebar {
-  background: color-mix(in srgb, var(--tb-bg), #4f46e5 16%);
-  border-bottom-color: rgba(79, 70, 229, 0.35);
+  background: color-mix(in srgb, var(--tb-bg), var(--accent) 18%);
+  border-bottom-color: rgba(99, 102, 241, 0.4);
 }
 .widget.dragging .titlebar { cursor: grabbing; }
+
+/* macOS Traffic Lights */
+.traffic-lights {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-right: 8px;
+}
+.traffic-lights .tl-btn {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: filter 0.15s ease, transform 0.1s ease;
+}
+.traffic-lights .tl-btn.close { background: var(--traffic-close); }
+.traffic-lights .tl-btn.minimize { background: var(--traffic-minimize); }
+.traffic-lights .tl-btn.maximize { background: var(--traffic-maximize); }
+.traffic-lights .tl-btn:hover { filter: brightness(1.2); transform: scale(1.08); }
+.traffic-lights .tl-btn:active { transform: scale(0.95); }
+.traffic-lights .tl-btn svg {
+  opacity: 0;
+  color: rgba(0, 0, 0, 0.65);
+  transition: opacity 0.15s;
+}
+.widget:hover .traffic-lights .tl-btn svg,
+.traffic-lights:hover .tl-btn svg {
+  opacity: 1;
+}
 
 .widget .titlebar .title {
   flex: 1;
@@ -246,11 +315,22 @@ html, body {
 .widget .term-host {
   flex: 1;
   min-height: 0;
-  padding: 6px;
-  background: #121212;
+  padding: 8px 10px 10px 10px;
+  background: #0d1017;
   position: relative;
+  border-radius: 0 0 var(--radius) var(--radius);
 }
 .widget .term-host .xterm { height: 100%; }
+
+.widget.node-minimized {
+  height: 36px !important;
+  min-height: 36px !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+}
+.widget.node-minimized .term-host,
+.widget.node-minimized .resize-handle {
+  display: none !important;
+}
 
 .widget .resize-handle {
   position: absolute;
@@ -527,19 +607,28 @@ html, body {
   top: 0;
   left: 0;
   border-radius: var(--radius);
-  background: var(--panel);
-  border: 1px solid var(--panel-border);
-  box-shadow: var(--shadow);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
   display: flex;
   flex-direction: column;
   user-select: none;
   overflow: visible;
-  transition: box-shadow 0.15s, border-color 0.15s;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.15s ease, opacity 0.15s ease;
 }
 
 .spatial-node.active {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 1px #6366f1, 0 12px 35px rgba(99, 102, 241, 0.2);
+  border-color: var(--glass-border-focus);
+  box-shadow: 0 0 0 1px var(--glass-border-focus), 0 25px 60px -10px rgba(0, 0, 0, 0.75);
+}
+
+.spatial-node.dragging {
+  opacity: 0.88;
+  transform: scale(1.015);
+  box-shadow: var(--glass-shadow-elevated);
+  cursor: grabbing !important;
 }
 
 .spatial-resize-handle {
@@ -581,20 +670,23 @@ html, body {
   transform: translateY(-50%) scale(1.35);
 }
 
-/* ---- Web Portal ---- */
-.web-portal .portal-header {
-  height: 38px;
+/* ---- Portal & Note Headers ---- */
+.portal-header,
+.web-portal .portal-header,
+.note-header {
+  height: 34px;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 0 10px;
-  background: #f1f1ee;
-  border-bottom: 1px solid var(--panel-border);
+  background: rgba(22, 27, 38, 0.75);
+  border-bottom: 1px solid var(--glass-border);
   border-radius: var(--radius) var(--radius) 0 0;
   cursor: grab;
+  color: var(--text);
 }
 
-.web-portal.dragging .portal-header {
+.spatial-node.dragging .portal-header {
   cursor: grabbing;
 }
 
@@ -1684,4 +1776,208 @@ body.reduced-motion *::after {
   animation-iteration-count: 1 !important;
   transition-duration: 0.001ms !important;
   scroll-behavior: auto !important;
+}
+
+/* ==========================================================================
+   Liquid Glass System & Spatial UI Additions (Maestri Overhaul)
+   ========================================================================== */
+
+.glass-surface {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+
+/* ---------- Floating macOS Glass Dock ---------- */
+#floating-dock {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 250;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
+  user-select: none;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease;
+}
+#floating-dock:hover {
+  box-shadow: 0 25px 60px -10px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+.dock-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dock-separator {
+  width: 1px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 0 4px;
+}
+.dock-btn {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.dock-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px) scale(1.08);
+  color: #ffffff;
+}
+.dock-btn:active {
+  transform: translateY(0) scale(0.96);
+}
+.dock-btn-primary {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.7), rgba(79, 70, 229, 0.9));
+  border-color: rgba(129, 140, 248, 0.4);
+}
+.dock-btn-primary:hover {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.9), rgba(67, 56, 202, 1));
+}
+.dock-zoom-readout {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 0 6px;
+  min-width: 44px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.dock-status-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: rgba(0, 0, 0, 0.3);
+  font-size: 11px;
+  color: var(--muted);
+}
+.dock-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f59e0b;
+}
+.dock-status-dot.on { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+.dock-status-dot.off { background: #ef4444; }
+
+/* ---------- Rich Prompt Composer ---------- */
+.prompt-composer {
+  position: absolute;
+  z-index: 80;
+  min-width: 380px;
+  max-width: 800px;
+  border-radius: 20px;
+  padding: 6px 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.12);
+  transition: box-shadow 0.2s, border-color 0.2s, opacity 0.2s;
+}
+.prompt-composer.docked {
+  box-shadow: 0 16px 40px -10px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(99, 102, 241, 0.35);
+}
+.prompt-composer.hidden { display: none !important; }
+.composer-handle {
+  height: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  user-select: none;
+}
+.composer-handle-bar {
+  width: 32px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.2);
+  transition: background 0.15s, width 0.15s;
+}
+.composer-handle:hover .composer-handle-bar {
+  background: rgba(255, 255, 255, 0.45);
+  width: 44px;
+}
+.composer-main {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.composer-spark-icon {
+  color: var(--accent);
+  padding-bottom: 8px;
+  display: flex;
+  align-items: center;
+}
+.composer-textarea {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13.5px;
+  line-height: 1.45;
+  resize: none;
+  outline: none;
+  padding: 6px 4px 8px;
+  min-height: 34px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.composer-textarea::placeholder {
+  color: var(--muted);
+  opacity: 0.8;
+}
+.composer-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 4px;
+}
+.composer-btn {
+  appearance: none;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s, transform 0.1s;
+}
+.composer-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+.composer-btn.active {
+  color: var(--accent);
+  background: rgba(99, 102, 241, 0.2);
+}
+.composer-btn.send-btn {
+  background: var(--accent);
+  color: #fff;
+}
+.composer-btn.send-btn:hover {
+  background: var(--accent-hover);
+  transform: scale(1.05);
 }

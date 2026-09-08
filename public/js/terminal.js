@@ -61,6 +61,48 @@ class TermWidget {
     const titlebar = document.createElement("div");
     titlebar.className = "titlebar";
 
+    // macOS Traffic Lights (Close, Minimize, Maximize/Elevate)
+    const trafficLights = document.createElement("div");
+    trafficLights.className = "traffic-lights";
+
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "tl-btn close";
+    closeBtn.title = "Fechar terminal";
+    closeBtn.innerHTML = window.Icons ? window.Icons.svg("x", { size: 8 }) : "✕";
+    closeBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+    closeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.app.requestKill(this.id);
+    });
+    trafficLights.appendChild(closeBtn);
+
+    const minBtn = document.createElement("button");
+    minBtn.className = "tl-btn minimize";
+    minBtn.title = "Minimizar / Expandir";
+    minBtn.innerHTML = window.Icons ? window.Icons.svg("minus", { size: 8 }) : "−";
+    minBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+    minBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.toggleMinimize();
+    });
+    trafficLights.appendChild(minBtn);
+
+    const maxBtn = document.createElement("button");
+    maxBtn.className = "tl-btn maximize";
+    maxBtn.title = "Maximizar / Elevar";
+    maxBtn.innerHTML = window.Icons ? window.Icons.svg("maximize-2", { size: 8 }) : "+";
+    maxBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+    maxBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (this.app?.motion?.toggleElevateNode) {
+        this.app.motion.toggleElevateNode(this.id);
+      }
+      setTimeout(() => this.fit(), 310);
+    });
+    trafficLights.appendChild(maxBtn);
+
+    titlebar.appendChild(trafficLights);
+
     const termIcon = document.createElement("span");
     termIcon.className = "term-icon";
     termIcon.style.display = "inline-flex";
@@ -132,33 +174,6 @@ class TermWidget {
       this.toggleSettings();
     });
     titlebar.appendChild(settingsBtn);
-
-    const maxBtn = document.createElement("button");
-    maxBtn.className = "tb-btn icon-btn";
-    maxBtn.innerHTML = window.Icons ? window.Icons.svg("maximize-2", { size: 13 }) : "⤢";
-    maxBtn.title = "Maximizar / Restaurar";
-    maxBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
-    maxBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (this.app?.motion?.toggleElevateNode) {
-        this.app.motion.toggleElevateNode(this.id);
-        const isElevated = this.el?.classList.contains("node-elevated");
-        maxBtn.innerHTML = window.Icons ? window.Icons.svg(isElevated ? "minimize-2" : "maximize-2", { size: 13 }) : (isElevated ? "⤡" : "⤢");
-      }
-      setTimeout(() => this.fit(), 310);
-    });
-    titlebar.appendChild(maxBtn);
-
-    const delBtn = document.createElement("button");
-    delBtn.className = "tb-btn icon-btn danger";
-    delBtn.innerHTML = window.Icons ? window.Icons.svg("close", { size: 13 }) : "✕";
-    delBtn.title = "Fechar terminal";
-    delBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
-    delBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      this.app.requestKill(this.id);
-    });
-    titlebar.appendChild(delBtn);
 
     const host = document.createElement("div");
     host.className = "term-host";
@@ -456,6 +471,15 @@ class TermWidget {
     if (this.popEl) this._syncPopInputs();
   }
 
+  toggleMinimize() {
+    this.el.classList.toggle("node-minimized");
+    const isMin = this.el.classList.contains("node-minimized");
+    if (this.app.connections) this.app.connections.redrawAll();
+    if (!isMin) {
+      setTimeout(() => this.fit(), 60);
+    }
+  }
+
   /* ---- painel de configurações ---- */
   toggleSettings() {
     if (this.popEl) this.closeSettings();
@@ -670,6 +694,9 @@ class TermWidget {
     this.el.style.left = `${x}px`;
     this.el.style.top = `${y}px`;
     if (this.app.connections) this.app.connections.redrawAll();
+    if (this.app.promptComposer && this.app.activeId === this.id) {
+      this.app.promptComposer.syncPosition();
+    }
   }
 
   setSize(w, h) {
@@ -679,6 +706,9 @@ class TermWidget {
     this.el.style.height = `${h}px`;
     this.fit();
     if (this.app.connections) this.app.connections.redrawAll();
+    if (this.app.promptComposer && this.app.activeId === this.id) {
+      this.app.promptComposer.syncPosition();
+    }
   }
 
   dispose() {

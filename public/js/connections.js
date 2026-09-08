@@ -134,6 +134,17 @@ class ConnectionsManager {
     return `M ${src.x} ${src.y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${dst.x} ${dst.y}`;
   }
 
+  _calculateBezier(src, dst) {
+    const dx = Math.abs(dst.x - src.x);
+    const span = Math.max(35, dx * 0.5);
+    const signX = src.x <= dst.x ? 1 : -1;
+    const c1x = src.x + span * signX;
+    const c1y = src.y;
+    const c2x = dst.x - span * signX;
+    const c2y = dst.y;
+    return `M ${src.x} ${src.y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${dst.x} ${dst.y}`;
+  }
+
   _calculateCircuit(src, dst) {
     // Trajetos ortogonais em ângulos retos de 90° com vértices suavemente arredondados (T021 / FR-013)
     const dx = dst.x - src.x;
