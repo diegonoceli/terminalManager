@@ -70,6 +70,11 @@ function handleMessage(msg) {
       break;
     }
     case "create_node": {
+      if (msg.node && msg.node.type === "terminal") {
+        const t = manager.create(msg.node || {});
+        broadcast({ type: "created", terminal: t });
+        break;
+      }
       const n = manager.createNode(msg.node || {});
       broadcast({ type: "node_created", node: n });
       break;
@@ -216,6 +221,20 @@ function handleMessage(msg) {
         broadcast({ type: "connection_removed", id: msg.id });
       }
       break;
+    case "connection_style": {
+      const c = manager.updateConnection(msg.id, { style: msg.style === "circuit" ? "circuit" : "rope" });
+      if (c) broadcast({ type: "connection_updated", connection: c });
+      break;
+    }
+    case "connection_bundle": {
+      const ids = Array.isArray(msg.connectionIds) ? msg.connectionIds : [];
+      const bundleId = msg.action === "create" ? `bundle_${Date.now().toString(36)}` : null;
+      for (const id of ids) {
+        const c = manager.updateConnection(id, bundleId ? { bundleId } : { bundleId: null });
+        if (c) broadcast({ type: "connection_updated", connection: c });
+      }
+      break;
+    }
     case "note_read": {
       const content = manager.noteRead(msg.nodeId);
       broadcast({ type: "note_read_result", nodeId: msg.nodeId, content });

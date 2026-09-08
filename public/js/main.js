@@ -139,6 +139,11 @@ function handleMessage(msg) {
         app.connections.remove(msg.id);
       }
       break;
+    case "connection_updated":
+      if (app.connections && typeof app.connections.updateFromMain === "function") {
+        app.connections.updateFromMain(msg.connection);
+      }
+      break;
     case "focus_terminal": {
       const w = app.widgets.get(msg.id);
       if (w) {
@@ -257,6 +262,10 @@ function ensureNode(data, doFit) {
       w = new NoteWidget({ ...data, app });
     } else if (data.type === "file-tree") {
       w = new FileTreeWidget({ ...data, app });
+    } else if (data.type === "text") {
+      w = new TextWidget({ ...data, app });
+    } else if (data.type === "drawing") {
+      w = new DrawWidget({ ...data, app });
     } else {
       w = new TermWidget({ ...data, app });
     }
@@ -348,6 +357,8 @@ app.sendStyle = (id, style) => send({ type: "style", id, style });
 app.requestKill = (id) => send({ type: "kill", id });
 app.sendCreateConnection = (data) => send({ type: "create_connection", ...data });
 app.sendRemoveConnection = (id) => send({ type: "remove_connection", id });
+app.sendConnectionStyle = (id, style) => send({ type: "connection_style", id, style });
+app.sendConnectionBundle = (action, connectionIds) => send({ type: "connection_bundle", action, connectionIds });
 app.openExternal = (url) => send({ type: "open_external", url });
 app.sendUpdateNode = (id, config) => send({ type: "update_node", id, config });
 app.sendOpenVSCode = (path) => send({ type: "open_vscode", path });
@@ -476,6 +487,26 @@ function createFileTree() {
   });
 }
 
+function createText() {
+  const size = app.canvas.viewportSize;
+  const center = app.canvas.screenToWorld(size.w / 2, size.h / 2);
+  app.newCount++;
+  send({
+    type: "create_node",
+    node: { type: "text", title: "Texto", x: Math.round(center.x - 130), y: Math.round(center.y - 60), width: 260, height: 120, content: "Texto" },
+  });
+}
+
+function createDrawing() {
+  const size = app.canvas.viewportSize;
+  const center = app.canvas.screenToWorld(size.w / 2, size.h / 2);
+  app.newCount++;
+  send({
+    type: "create_node",
+    node: { type: "drawing", title: "Desenho", x: Math.round(center.x - 180), y: Math.round(center.y - 130), width: 360, height: 260, strokes: [] },
+  });
+}
+
 /* ---------------- zoom & pan ---------------- */
 function zoomIn() {
   const s = app.canvas.viewportSize;
@@ -537,6 +568,8 @@ document.getElementById("btn-new-device")?.addEventListener("click", () => {
 document.getElementById("btn-new-editor")?.addEventListener("click", createEditor);
 document.getElementById("btn-new-note")?.addEventListener("click", createNote);
 document.getElementById("btn-new-files")?.addEventListener("click", createFileTree);
+document.getElementById("btn-new-text")?.addEventListener("click", createText);
+document.getElementById("btn-new-draw")?.addEventListener("click", createDrawing);
 document.getElementById("btn-agents")?.addEventListener("click", () => {
   if (window.Settings) Settings.openRolesManager();
 });

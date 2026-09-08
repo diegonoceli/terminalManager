@@ -68,6 +68,13 @@ class ConnectionsManager {
         this.app.sendRemoveConnection(conn.id);
       }
     });
+    g.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this._openConnMenu(e.clientX, e.clientY, conn);
+    });
+    g.dataset.style = conn.style || "rope";
+    g.dataset.bundle = conn.bundleId || "";
 
     this.svg.appendChild(g);
     if (redraw) this.redraw(conn.id);
@@ -77,6 +84,18 @@ class ConnectionsManager {
     this.connections.delete(id);
     const g = this.svg.querySelector(`.connection-group[data-id="${id}"]`);
     if (g) g.remove();
+  }
+
+  /** Atualiza uma conexão existente vinda do main (estilo/feixe). */
+  updateFromMain(conn) {
+    if (!conn || !conn.id) return;
+    this.connections.set(conn.id, conn);
+    const g = this.svg.querySelector(`.connection-group[data-id="${conn.id}"]`);
+    if (g) {
+      g.dataset.style = conn.style || "rope";
+      g.dataset.bundle = conn.bundleId || "";
+    }
+    this.redraw(conn.id);
   }
 
   _getAnchorPoints(w1, w2) {
@@ -110,6 +129,17 @@ class ConnectionsManager {
     return `M ${src.x} ${src.y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${dst.x} ${dst.y}`;
   }
 
+  _calculateCircuit(src, dst) {
+    // Trilhos alinhados aos eixos com curva de 90° (FR-038)
+    const mx = (src.x + dst.x) / 2;
+    const my = src.y;
+    return `M ${src.x} ${src.y} L ${mx} ${my} Q ${mx} ${(src.y + dst.y) / 2} ${mx} ${dst.y} L ${dst.x} ${dst.y}`;
+  }
+
+  _pathFor(conn, src, dst) {
+    return conn && conn.style === "circuit" ? this._calculateCircuit(src, dst) : this._calculateBezier(src, dst);
+  }
+
   redraw(id) {
     const conn = this.connections.get(id);
     if (!conn) return;
@@ -127,11 +157,116 @@ class ConnectionsManager {
     g.style.display = "";
 
     const { src, dst } = this._getAnchorPoints(w1, w2);
-    const d = this._calculateBezier(src, dst);
+    const d = this._pathFor(conn, src, dst);
 
     for (const p of g.querySelectorAll("path")) {
       p.setAttribute("d", d);
     }
+    g.dataset.style = conn.style || "rope";
+    this._syncBundleVisual(g, conn);
+  }
+
+  /** Atualiza classes/laço (abraçadeira) conforme bundleId (FR-039). */
+  _syncBundleVisual(g, conn) {
+    if (!conn.bundleId) {
+      g.classList.remove("bundle-member", "bundle-rep");
+      const tie = g.querySelector(".tie-bundle");
+      if (tie) tie.remove();
+      return;
+    }
+    const members = [...this.connections.values()].filter((c) => c.bundleId === conn.bundleId);
+    const rep = members.length ? members.reduce((a, b) => (a.id < b.id ? a : b)) : conn;
+    const isRep = rep.id === conn.id;
+    g.classList.toggle("bundle-member", !!conn.bundleId && !isRep);
+    g.classList.toggle("bundle-rep", !!conn.bundleId && isRep);
+
+    let tie = g.querySelector(".tie-bundle");
+    if (!isRep || members.length < 2) {
+      if (tie) tie.remove();
+      return;
+    }
+    if (!tie) {
+      tie = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      tie.setAttribute("class", "tie-bundle");
+      tie.setAttribute("width", 14);
+      tie.setAttribute("height", 7);
+      tie.setAttribute("rx", 3.5);
+      g.appendChild(tie);
+    }
+    const pathEl = g.querySelector(".connection-path");
+    try {
+      const total = pathEl.getTotalLength();
+      const pt = pathEl.getPointAtLength(total / 2);
+      tie.setAttribute("x", pt.x - 7);
+      tie.setAttribute("y", pt.y - 3.5);
+    } catch {}
+  }
+
+  /** Menu de contexto da conexão: estilo + feixe (abraçadeira). */
+  _openConnMenu(x, y, conn) {
+    if (!this.menu) {
+      this.menu = document.createElement("div");
+      this.menu.className = "ctx-menu hidden";
+      document.body.appendChild(this.menu);
+    }
+    const m = this.menu;
+    m.innerHTML = "";
+    const item = (label, fn) => {
+      const d = document.createElement("div");
+      d.className = "ctx-item";
+      d.textContent = label;
+      d.addEventListener("click", () => {
+        m.classList.add("hidden");
+        fn();
+      });
+      m.appendChild(d);
+    };
+
+    item(conn.style === "circuit" ? "Estilo: Corda" : "Estilo: Circuito", () => {
+      this.app.sendConnectionStyle(conn.id, conn.style === "circuit" ? "rope" : "circuit");
+    });
+    if (conn.bundleId) {
+      item("Soltar do feixe (abraçadeira)", () => this.app.sendConnectionBundle("release", [conn.id]));
+    } else {
+      item("Agrupar em feixe (abraçadeira)", () => {
+        const ids = [conn.id, ...this._overlappingWith(conn).map((c) => c.id)];
+        if (ids.length > 1 && this.app.sendConnectionBundle) {
+          this.app.sendConnectionBundle("create", ids);
+        } else if (window.toast) {
+          toast("Sem outras conexões próximas para agrupar.");
+        }
+      });
+    }
+    item("Remover conexão", () => this.app.sendRemoveConnection(conn.id));
+
+    m.classList.remove("hidden");
+    const mw = 230;
+    m.style.left = Math.min(x, window.innerWidth - mw - 8) + "px";
+    m.style.top = Math.min(y, window.innerHeight - m.offsetHeight - 8) + "px";
+    setTimeout(() => document.addEventListener("pointerdown", () => m.classList.add("hidden"), { once: true }), 0);
+  }
+
+  /** Conexões cujas caixas (src/dst) intersectam a caixa de `conn`. */
+  _overlappingWith(conn) {
+    const box = (c) => {
+      const w1 = this._getNode(c.from);
+      const w2 = this._getNode(c.to);
+      if (!w1 || !w2) return null;
+      const minX = Math.min(w1.worldPos.x, w2.worldPos.x);
+      const minY = Math.min(w1.worldPos.y, w2.worldPos.y);
+      const maxX = Math.max(w1.worldPos.x + w1.worldSize.w, w2.worldPos.x + w2.worldSize.w);
+      const maxY = Math.max(w1.worldPos.y + w1.worldSize.h, w2.worldPos.y + w2.worldSize.h);
+      return { minX, minY, maxX, maxY };
+    };
+    const a = box(conn);
+    if (!a) return [];
+    const out = [];
+    for (const c of this.connections.values()) {
+      if (c.id === conn.id || c.bundleId) continue;
+      const b = box(c);
+      if (b && a.minX <= b.maxX && b.minX <= a.maxX && a.minY <= b.maxY && b.minY <= a.maxY) out.push(c);
+    }
+    return out;
   }
 
   redrawAll() {

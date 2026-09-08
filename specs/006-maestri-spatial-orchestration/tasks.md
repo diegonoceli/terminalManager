@@ -189,11 +189,11 @@
 
 ### Implementation for User Story 7
 
-- [ ] T065 [US7] Adicionar `style: "rope"|"circuit"` (default `rope`) e `bundleId?` a `ConnectionData` + IPC `connection_style`/`connection_bundle` em `electron/terminal-manager.js` e `electron/main.js` — FR-038/FR-039
-- [ ] T066 [US7] Renderizar estilo Circuito (polilinha ortogonal com curvas de 90°) em `public/js/connections.js` e alternar via menu de contexto da linha/badge — FR-038
-- [ ] T067 [US7] Ajustar estilo Corda com física pendular suave (bezier simétrico amortecido) em `public/js/connections.js` — FR-038
-- [ ] T068 [US7] Implementar abraçadeiras em `public/js/connections.js`: `Alt+drag` sobre cordas cria `bundleId` (feixe agrupado reposicionável); arrastar de novo sobre o feixe o dissolve preservando cada conexão — FR-039
-- [ ] T069 [US7] Persistir e restaurar `style`/`bundleId` no layout (broadcast e state v3); remover vínculo de feixe quando um nó é excluído
+- [X] T065 [US7] Adicionar `style: "rope"|"circuit"` (default `rope`) e `bundleId?` a `ConnectionData` + IPC `connection_style`/`connection_bundle` em `electron/terminal-manager.js` e `electron/main.js` — FR-038/FR-039
+- [X] T066 [US7] Renderizar estilo Circuito (polilinha ortogonal com curvas de 90°) em `public/js/connections.js` e alternar via menu de contexto da linha/badge — FR-038
+- [X] T067 [US7] Ajustar estilo Corda com física pendular suave (bezier simétrico amortecido) em `public/js/connections.js` — FR-038
+- [X] T068 [US7] Implementar abraçadeiras em `public/js/connections.js`: `Alt+drag` sobre cordas cria `bundleId` (feixe agrupado reposicionável); arrastar de novo sobre o feixe o dissolve preservando cada conexão — FR-039
+- [X] T069 [US7] Persistir e restaurar `style`/`bundleId` no layout (broadcast e state v3); remover vínculo de feixe quando um nó é excluído
 
 **Checkpoint**: US7 isolada — estilos alternáveis e feixes persistidos sem quebrar conexões.
 
@@ -208,8 +208,8 @@
 ### Implementation for User Story 8
 
 - [ ] T070 [US8] Implementar inserção por arrasto de retângulo (ferramenta ativa → `mousedown` no canvas → retângulo de seleção → cria nó no tamanho desenhado) em `public/js/canvas.js` + `main.js` — FR-040
-- [ ] T071 [P] [US8] Implementar `TextWidget` (rótulo/snippet contenteditable) e `DrawWidget` (canvas 2D com strokes `{color,width,points}`) em `public/js/widgets/textdraw.js`; registrar fábricas `text`/`drawing` em `main.js` e botões de ferramenta — FR-041
-- [ ] T072 [US8] Persistir `strokes`/`content` do desenho/texto via `update_node` em `electron/main.js` e restaurar no load — FR-041
+- [X] T071 [P] [US8] Implementar `TextWidget` (rótulo/snippet contenteditable) e `DrawWidget` (canvas 2D com strokes `{color,width,points}`) em `public/js/widgets/textdraw.js`; registrar fábricas `text`/`drawing` em `main.js` e botões de ferramenta — FR-041
+- [X] T072 [US8] Persistir `strokes`/`content` do desenho/texto via `update_node` em `electron/main.js` e restaurar no load — FR-041
 - [ ] T073 [P] [US8] Implementar duplicar (`Alt+arrastar` ou menu direito) em `public/js/main.js` (clone do nó + geometria deslocada) — FR-042
 - [ ] T074 [US8] Implementar grupos em `canvas.js`/`main.js`: seleção múltipla + `Ctrl+G` cria `Group` (persistido em `AppState.workspaces[].groups`), frame nomeado, mover cabeçalho move membros, seleção passa pelo frame; `Ctrl+Shift+G` dissolve — FR-043
 - [ ] T075 [P] [US8] Implementar alinhar/distribuir e organizar em grade (`Ctrl+Shift+T`) em `public/js/main.js` sobre nós selecionados — FR-044/FR-045
