@@ -432,6 +432,10 @@ function createWindow() {
     }
   });
 
+  win.webContents.on("console-message", (event, level, message, line, sourceId) => {
+    console.log(`[Renderer] ${message} (${sourceId}:${line})`);
+  });
+
   win.loadFile(join(__dirname, "..", "public", "index.html"));
 }
 

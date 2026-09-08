@@ -1072,7 +1072,7 @@ if (canvasBg) {
 }
 
 /* ---------------- Temas de terminal (US10) ---------------- */
-const THEME_PRESETS = {
+const GLOBAL_THEME_PRESETS = {
   dracula: { bg: "#282a36", fg: "#f8f8f2", cursor: "#f8f8f2", cursorAccent: "#282a36", titlebar: "#1e1f29", titlebarText: "#f8f8f2", selBg: "#44475a", selFg: "#ffffff" },
   catppuccin: { bg: "#1e1e2e", fg: "#cdd6f4", cursor: "#f5e0dc", cursorAccent: "#1e1e2e", titlebar: "#181825", titlebarText: "#cdd6f4", selBg: "#45475a", selFg: "#ffffff" },
   nord: { bg: "#2e3440", fg: "#d8dee9", cursor: "#eceff4", cursorAccent: "#2e3440", titlebar: "#3b4252", titlebarText: "#eceff4", selBg: "#434c5e", selFg: "#ffffff" },
@@ -1088,8 +1088,8 @@ function themeSelect() {
       sel.value = "";
       if (v === "__import__") {
         if (app.send) send({ type: "pick_ghostty_theme" });
-      } else if (v && THEME_PRESETS[v]) {
-        applyThemeToActive(THEME_PRESETS[v], v);
+      } else if (v && GLOBAL_THEME_PRESETS[v]) {
+        applyThemeToActive(GLOBAL_THEME_PRESETS[v], v);
       }
     });
   }
@@ -1107,7 +1107,7 @@ function applyThemeToActive(style, label) {
     toast("O nó ativo não é um terminal.");
     return;
   }
-  sendStyle(w.id, { ...style });
+  app.sendStyle(w.id, { ...style });
   if (label) toast(`Tema ${label} aplicado ao terminal ativo.`);
 }
 
