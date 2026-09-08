@@ -19,12 +19,18 @@ class ConnectionsManager {
   }
 
   _bindWindowEvents() {
+    window.addEventListener("pointerdown", (e) => {
+      if (e.altKey && e.button === 0) {
+        this._startTieDrag(e.clientX, e.clientY);
+      }
+    });
     window.addEventListener("pointermove", (e) => this._onPointerMove(e));
     window.addEventListener("pointerup", (e) => this._onPointerUp(e));
     window.addEventListener("pointercancel", (e) => this._onPointerUp(e));
     window.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && this.activeDrag) {
-        this._cancelDrag();
+      if (e.key === "Escape") {
+        if (this.activeDrag) this._cancelDrag();
+        if (this._tieDrag) this._cancelTieDrag();
       }
     });
   }
@@ -454,6 +460,10 @@ class ConnectionsManager {
   }
 
   _onPointerMove(e) {
+    if (this._tieDrag) {
+      this._updateTieDrag(e.clientX, e.clientY);
+      return;
+    }
     if (!this.activeDrag) return;
     const canvas = this.app.canvas;
     const worldPt = canvas ? canvas.screenToWorld(e.clientX, e.clientY) : { x: e.clientX, y: e.clientY };
@@ -513,6 +523,10 @@ class ConnectionsManager {
   }
 
   _onPointerUp(e) {
+    if (this._tieDrag) {
+      this._finishTieDrag();
+      return;
+    }
     if (!this.activeDrag) return;
 
     const fromId = this.activeDrag.fromId;
@@ -550,6 +564,171 @@ class ConnectionsManager {
     }
 
     this._cancelDrag();
+  }
+
+  /* ---- Abraçadeiras (Cable Ties) via Alt + Traço (T028 / US5 / FR-029) ---- */
+  _startTieDrag(clientX, clientY) {
+    const canvas = this.app.canvas;
+    const worldPt = canvas ? canvas.screenToWorld(clientX, clientY) : { x: clientX, y: clientY };
+    this._tieDrag = {
+      start: { x: clientX, y: clientY },
+      startWorld: worldPt,
+      currentWorld: worldPt,
+    };
+    if (!this._tiePreview) {
+      this._tiePreview = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      this._tiePreview.setAttribute("class", "cable-tie-slash");
+      this._tiePreview.setAttribute("stroke", "#f59e0b");
+      this._tiePreview.setAttribute("stroke-width", "3");
+      this._tiePreview.setAttribute("stroke-dasharray", "4 3");
+      this.svg.appendChild(this._tiePreview);
+    }
+    this._tiePreview.setAttribute("x1", worldPt.x);
+    this._tiePreview.setAttribute("y1", worldPt.y);
+    this._tiePreview.setAttribute("x2", worldPt.x);
+    this._tiePreview.setAttribute("y2", worldPt.y);
+  }
+
+  _updateTieDrag(clientX, clientY) {
+    if (!this._tieDrag || !this._tiePreview) return;
+    const canvas = this.app.canvas;
+    const worldPt = canvas ? canvas.screenToWorld(clientX, clientY) : { x: clientX, y: clientY };
+    this._tieDrag.currentWorld = worldPt;
+    this._tiePreview.setAttribute("x2", worldPt.x);
+    this._tiePreview.setAttribute("y2", worldPt.y);
+  }
+
+  _finishTieDrag() {
+    if (!this._tieDrag) return;
+    const p1 = this._tieDrag.startWorld;
+    const p2 = this._tieDrag.currentWorld;
+    this._cancelTieDrag();
+
+    const minX = Math.min(p1.x, p2.x);
+    const maxX = Math.max(p1.x, p2.x);
+    const minY = Math.min(p1.y, p2.y);
+    const maxY = Math.max(p1.y, p2.y);
+
+    const crossed = [];
+    for (const [id, conn] of this.connections.entries()) {
+      const w1 = this._getNode(conn.from);
+      const w2 = this._getNode(conn.to);
+      if (!w1 || !w2) continue;
+      const { src, dst } = this._getAnchorPoints(w1, w2);
+      const cMinX = Math.min(src.x, dst.x);
+      const cMaxX = Math.max(src.x, dst.x);
+      const cMinY = Math.min(src.y, dst.y);
+      const cMaxY = Math.max(src.y, dst.y);
+
+      if (maxX >= cMinX && minX <= cMaxX && maxY >= cMinY && minY <= cMaxY) {
+        crossed.push(id);
+      }
+    }
+
+    if (crossed.length >= 2) {
+      if (this.app.sendConnectionBundle) {
+        this.app.sendConnectionBundle("create", crossed);
+      }
+      if (window.toast) toast(`Abraçadeira criada para feixe de ${crossed.length} cabos.`);
+    }
+  }
+
+  _cancelTieDrag() {
+    if (this._tiePreview) {
+      this._tiePreview.remove();
+      this._tiePreview = null;
+    }
+    this._tieDrag = null;
+  }
+
+  /* ---- Popover de Inspeção de Conexões do Nó (T030 / US5 / FR-028) ---- */
+  openNodeConnectionsPopover(nodeId, clientX, clientY) {
+    const existing = document.getElementById("node-conn-popover");
+    if (existing) existing.remove();
+
+    const conns = [...this.connections.values()].filter(c => c.from === nodeId || c.to === nodeId);
+    if (!conns.length) {
+      if (window.toast) toast("Este nó não possui conexões ativas.");
+      return;
+    }
+
+    const popover = document.createElement("div");
+    popover.id = "node-conn-popover";
+    popover.className = "ctx-menu";
+    popover.style.minWidth = "220px";
+    popover.style.padding = "6px 0";
+    popover.style.zIndex = "1000";
+
+    const head = document.createElement("div");
+    head.style.padding = "4px 10px 6px 10px";
+    head.style.fontSize = "11px";
+    head.style.fontWeight = "600";
+    head.style.color = "var(--text-muted, #888)";
+    head.style.borderBottom = "1px solid var(--panel-border, #e5e5e5)";
+    head.textContent = `Conexões (${conns.length})`;
+    popover.appendChild(head);
+
+    for (const c of conns) {
+      const otherId = c.from === nodeId ? c.to : c.from;
+      const other = this._getNode(otherId);
+      const title = other?.titleText || other?.title || otherId;
+      const isOut = c.from === nodeId;
+
+      const row = document.createElement("div");
+      row.className = "ctx-item";
+      row.style.display = "flex";
+      row.style.alignItems = "center";
+      row.style.justifyContent = "space-between";
+      row.style.padding = "6px 10px";
+
+      const info = document.createElement("div");
+      info.style.display = "flex";
+      info.style.alignItems = "center";
+      info.style.gap = "6px";
+      info.style.cursor = "pointer";
+      info.innerHTML = `<span>${isOut ? "→" : "←"}</span> <span style="font-weight:500;">${title}</span>`;
+      info.addEventListener("click", () => {
+        popover.remove();
+        if (other) {
+          if (this.app?.setActive) this.app.setActive(otherId);
+          if (this.app?.focusTerminal && (other.type === "terminal" || !other.type)) {
+            this.app.focusTerminal(other, true);
+          } else if (this.app?.canvas?.panToNode) {
+            this.app.canvas.panToNode(other);
+          }
+        }
+      });
+
+      const delBtn = document.createElement("button");
+      delBtn.className = "btn small danger";
+      delBtn.style.padding = "2px 6px";
+      delBtn.style.fontSize = "11px";
+      delBtn.textContent = "×";
+      delBtn.title = "Desconectar";
+      delBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        popover.remove();
+        if (this.app?.sendRemoveConnection) {
+          this.app.sendRemoveConnection(c.id);
+        }
+      });
+
+      row.appendChild(info);
+      row.appendChild(delBtn);
+      popover.appendChild(row);
+    }
+
+    document.body.appendChild(popover);
+    popover.style.left = `${Math.min(clientX, window.innerWidth - 240)}px`;
+    popover.style.top = `${Math.min(clientY, window.innerHeight - 200)}px`;
+
+    const closeHandler = (e) => {
+      if (!popover.contains(e.target)) {
+        popover.remove();
+        document.removeEventListener("pointerdown", closeHandler);
+      }
+    };
+    setTimeout(() => document.addEventListener("pointerdown", closeHandler), 20);
   }
 }
 

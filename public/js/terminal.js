@@ -25,10 +25,11 @@ const THEME_PRESETS = {
 };
 
 class TermWidget {
-  constructor({ id, title, x, y, width, height, style, app }) {
+  constructor({ id, title, x, y, width, height, style, app, roleId }) {
     this.id = id;
     this.app = app;
     this.titleText = title;
+    this.roleId = roleId || null;
     this.worldPos = { x, y };
     this.worldSize = { w: width, h: height };
     this.style = { ...DEFAULT_STYLE, ...(style || {}) };
@@ -46,6 +47,7 @@ class TermWidget {
     this.el = this._build();
     this._setupTerm();
     this._bindEvents();
+    this.updateRoleBadge();
     this.applyStyle(this.style, { skipSend: true });
   }
 
@@ -124,6 +126,10 @@ class TermWidget {
     this.spinnerEl.innerHTML = window.Icons ? window.Icons.svg("loader", { size: 13, className: "icon-spin" }) : "";
     titlebar.appendChild(this.spinnerEl);
 
+    this.roleBadge = document.createElement("span");
+    this.roleBadge.className = "terminal-role-badge hidden";
+    titlebar.appendChild(this.roleBadge);
+
     this.titleEl = document.createElement("span");
     this.titleEl.className = "title";
     this.titleEl.textContent = this.titleText;
@@ -163,6 +169,17 @@ class TermWidget {
     });
     titlebar.appendChild(focusBtn);
 
+    const agentBtn = document.createElement("button");
+    agentBtn.className = "tb-btn icon-btn";
+    agentBtn.innerHTML = window.Icons ? window.Icons.svg("bot", { size: 13 }) : "🤖";
+    agentBtn.title = "Iniciar Agente de IA nesta pasta (Claude, OpenCode, Codex...)";
+    agentBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+    agentBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.openAgentMenu(agentBtn);
+    });
+    titlebar.appendChild(agentBtn);
+
     const settingsBtn = document.createElement("button");
     settingsBtn.className = "tb-btn icon-btn";
     settingsBtn.innerHTML = window.Icons ? window.Icons.svg("settings", { size: 13 }) : "⚙";
@@ -196,6 +213,94 @@ class TermWidget {
     el.appendChild(portRight);
     el.appendChild(portLeft);
     return el;
+  }
+
+  openAgentMenu(btn) {
+    let menu = document.getElementById("terminal-agent-menu");
+    if (!menu) {
+      menu = document.createElement("div");
+      menu.id = "terminal-agent-menu";
+      menu.className = "ctx-menu hidden";
+      document.body.appendChild(menu);
+    }
+    menu.innerHTML = "";
+    const rect = btn.getBoundingClientRect();
+
+    const addItem = (label, fn, isTitle) => {
+      const it = document.createElement("div");
+      it.className = "ctx-item" + (isTitle ? " ctx-header" : "");
+      it.textContent = label;
+      if (!isTitle) {
+        it.addEventListener("click", () => {
+          menu.classList.add("hidden");
+          fn();
+        });
+      }
+      menu.appendChild(it);
+    };
+
+    addItem("INICIAR AGENTE NA PASTA ATUAL", null, true);
+
+    const availableAgents = (this.app?.agents || []).filter((a) => a.available);
+    const agentList = availableAgents.length
+      ? availableAgents.map((a) => a.kind)
+      : ["claude", "opencode", "codex"];
+
+    for (const kind of agentList) {
+      addItem(`Executar ${kind}`, () => {
+        if (this.app?.sendInput) {
+          this.app.sendInput(this.id, `${kind}\r`);
+        }
+        if (this.titleEl && !this.titleEl.textContent.includes(kind)) {
+          this.titleText = `${kind} · ${this.titleText}`;
+          this.titleEl.textContent = this.titleText;
+          if (this.app?.sendRename) this.app.sendRename(this.id, this.titleText);
+        }
+      });
+    }
+
+    addItem("Configurar Agentes & Papéis…", () => {
+      if (window.Settings && window.Settings.openRolesManager) {
+        window.Settings.openRolesManager();
+      }
+    });
+
+    addItem("Descobrir Responsabilidades no Repositório…", () => {
+      if (this.app?.send) {
+        this.app.send({ type: "role_discover" });
+      }
+    });
+
+    menu.classList.remove("hidden");
+    const mw = 230;
+    menu.style.left = `${Math.min(window.innerWidth - mw - 8, Math.max(8, rect.left))}px`;
+    menu.style.top = `${Math.min(window.innerHeight - 200, rect.bottom + 4)}px`;
+
+    const close = (e) => {
+      if (!menu.contains(e.target) && !btn.contains(e.target)) {
+        menu.classList.add("hidden");
+        document.removeEventListener("pointerdown", close);
+      }
+    };
+    setTimeout(() => document.addEventListener("pointerdown", close), 50);
+  }
+
+  updateRoleBadge() {
+    if (!this.roleBadge) return;
+    const roleId = this.roleId;
+    if (!roleId) {
+      this.roleBadge.classList.add("hidden");
+      this.roleBadge.textContent = "";
+      return;
+    }
+    const role = (this.app?.roles || []).find((r) => r.id === roleId);
+    if (role) {
+      this.roleBadge.textContent = role.name;
+      this.roleBadge.style.backgroundColor = role.badgeColor || "#4f46e5";
+      this.roleBadge.classList.remove("hidden");
+    } else {
+      this.roleBadge.classList.add("hidden");
+    }
   }
 
   setAttention(on) {
@@ -408,6 +513,10 @@ class TermWidget {
   }
 
   focus() {
+    this.setAttention(false);
+    if (this.app?.send) {
+      this.app.send({ type: "terminal_selected", terminalId: this.id, selected: true });
+    }
     this.term.focus();
   }
 
@@ -721,6 +830,10 @@ class TermWidget {
       this._dragged = false;
       e.stopPropagation();
       this.app.setActive(this.id);
+      this.setAttention(false);
+      if (this.app?.send) {
+        this.app.send({ type: "terminal_selected", terminalId: this.id, selected: true });
+      }
     });
 
     this.el.addEventListener("click", (e) => {
@@ -730,6 +843,12 @@ class TermWidget {
 
     const titlebar = this.el.querySelector(".titlebar");
     titlebar.addEventListener("pointerdown", (e) => this._onDragStart(e));
+    titlebar.addEventListener("dblclick", (e) => {
+      if (e.target.closest(".title-btn") || e.target.closest("input")) return;
+      if (this.app?.motion?.toggleElevateNode) {
+        this.app.motion.toggleElevateNode(this.id);
+      }
+    });
 
     const handle = this.el.querySelector(".resize-handle");
     handle.addEventListener("pointerdown", (e) => this._onResizeStart(e));
@@ -738,11 +857,21 @@ class TermWidget {
     const portLeft = this.el.querySelector(".conn-port.port-left");
     const bindPort = (port) => {
       if (port) {
+        let downPos = null;
         port.addEventListener("pointerdown", (e) => {
           if (e.button !== 0) return;
           e.stopPropagation();
+          downPos = { x: e.clientX, y: e.clientY };
           if (this.app.connections) {
             this.app.connections.startDrag(this.id, e.clientX, e.clientY);
+          }
+        });
+        port.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (downPos && Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y) < 5) {
+            if (this.app?.connections?.openNodeConnectionsPopover) {
+              this.app.connections.openNodeConnectionsPopover(this.id, e.clientX, e.clientY);
+            }
           }
         });
       }
@@ -864,7 +993,14 @@ class TermWidget {
       if (ev.pointerId !== pointerId) return;
       this._dragged = true;
       const d = canvas.screenToWorldDelta(ev.clientX - startSx, ev.clientY - startSy);
-      this.setPosition(startWorld.x + d.x, startWorld.y + d.y);
+      let targetX = startWorld.x + d.x;
+      let targetY = startWorld.y + d.y;
+      if (ev.ctrlKey && canvas.computeMagneticSnap) {
+        const snap = canvas.computeMagneticSnap(this, targetX, targetY, this.app?.widgets);
+        targetX = snap.x;
+        targetY = snap.y;
+      }
+      this.setPosition(targetX, targetY);
     };
 
     const onUp = (ev) => {

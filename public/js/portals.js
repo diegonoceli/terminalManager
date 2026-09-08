@@ -90,6 +90,13 @@ class BasePortalWidget {
       e.stopPropagation();
     });
 
+    handle.addEventListener("dblclick", (e) => {
+      if (e.target.closest("button") || e.target.closest("input") || e.target.closest("textarea")) return;
+      if (this.app?.motion?.toggleElevateNode) {
+        this.app.motion.toggleElevateNode(this.id);
+      }
+    });
+
     handle.addEventListener("pointermove", (e) => {
       if (!dragging) return;
       this._dragCtrl = e.ctrlKey || e.metaKey;
@@ -177,11 +184,21 @@ class BasePortalWidget {
 
   _setupConnectionPorts(portLeft, portRight) {
     const bindPort = (port) => {
+      let downPos = null;
       port.addEventListener("pointerdown", (e) => {
         if (e.button !== 0) return;
         e.stopPropagation();
+        downPos = { x: e.clientX, y: e.clientY };
         if (this.app?.connections) {
           this.app.connections.startDrag(this.id, e.clientX, e.clientY);
+        }
+      });
+      port.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (downPos && Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y) < 5) {
+          if (this.app?.connections?.openNodeConnectionsPopover) {
+            this.app.connections.openNodeConnectionsPopover(this.id, e.clientX, e.clientY);
+          }
         }
       });
     };
@@ -318,6 +335,21 @@ class WebPortalWidget extends BasePortalWidget {
     });
   }
 
+  getPartition() {
+    return this.sessionPartition || "persist:portal_" + (this.sharedSessionId || this.id);
+  }
+
+  syncSessionWith(otherPortal) {
+    if (!otherPortal || typeof otherPortal.getPartition !== "function") return;
+    if (this.app?.send) {
+      this.app.send({
+        type: "portal_sync_cookies",
+        fromPartition: this.getPartition(),
+        toPartition: otherPortal.getPartition(),
+      });
+    }
+  }
+
   _createView(container) {
     container.innerHTML = "";
     // Check if Electron webview tag is available
@@ -325,6 +357,8 @@ class WebPortalWidget extends BasePortalWidget {
       const webview = document.createElement("webview");
       webview.setAttribute("src", this.url);
       webview.setAttribute("allowpopups", "true");
+      const partition = this.sessionPartition || "persist:portal_" + (this.sharedSessionId || this.id);
+      webview.setAttribute("partition", partition);
       webview.className = "portal-webview";
       webview.addEventListener("did-start-loading", () => {
         this.el.classList.add("loading");
@@ -413,6 +447,47 @@ class WebPortalWidget extends BasePortalWidget {
       this.viewEl.setZoomFactor(factor);
     }
   }
+
+  /* ---- Automação de Portais Web via CLI maestri portal (T036 / US7 / FR-040) ---- */
+  async evalJS(code) {
+    if (this.viewEl && typeof this.viewEl.executeJavaScript === "function") {
+      return this.viewEl.executeJavaScript(code);
+    }
+    return null;
+  }
+
+  async clickSelector(selector) {
+    return this.evalJS(`(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      if (el) { el.click(); return true; }
+      return false;
+    })()`);
+  }
+
+  async typeSelector(selector, text) {
+    return this.evalJS(`(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      if (el) {
+        el.value = ${JSON.stringify(text)};
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        return true;
+      }
+      return false;
+    })()`);
+  }
+
+  async getDOM() {
+    return this.evalJS(`document.documentElement.outerHTML`);
+  }
+
+  async takeScreenshot() {
+    if (this.viewEl && typeof this.viewEl.capturePage === "function") {
+      const nativeImg = await this.viewEl.capturePage();
+      return nativeImg.toDataURL();
+    }
+    return null;
+  }
 }
 
 const MOBILE_USER_AGENTS = {
@@ -470,6 +545,9 @@ class DevicePortalWidget extends BasePortalWidget {
       
       <!-- Smartphone chassis frame -->
       <div class="phone-frame">
+        <div class="phone-side-btn btn-vol-up" title="Aumentar Volume"></div>
+        <div class="phone-side-btn btn-vol-down" title="Diminuir Volume"></div>
+        <div class="phone-side-btn btn-power" title="Power / Bloquear Tela"></div>
         <div class="phone-speaker"></div>
         <div class="phone-camera"></div>
         
@@ -483,8 +561,14 @@ class DevicePortalWidget extends BasePortalWidget {
         <!-- Screen webview or app preview -->
         <div class="phone-screen-container"></div>
         
-        <!-- Home bar -->
-        <div class="phone-home-indicator"></div>
+        <!-- Home bar / Android navigation buttons -->
+        ${!isApple ? `
+        <div class="phone-nav-buttons">
+          <button class="phone-nav-btn btn-back" title="Voltar (Back)">◀</button>
+          <button class="phone-nav-btn btn-home" title="Início (Home)">●</button>
+          <button class="phone-nav-btn btn-recents" title="Recentes (Apps)">■</button>
+        </div>` : `
+        <div class="phone-home-indicator" title="Início (Home)"></div>`}
       </div>
 
       <div class="spatial-resize-handle"></div>
@@ -506,6 +590,101 @@ class DevicePortalWidget extends BasePortalWidget {
 
     el.addEventListener("pointerdown", () => {
       this.app.setActive(this.id);
+    });
+
+    // Controles físicos laterais (T038 / US7)
+    el.querySelector(".btn-vol-up")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.app.send?.({
+        type: "portal_device_action",
+        deviceId: this.deviceId || this.id,
+        platform: isApple ? "ios" : "android",
+        action: "key",
+        params: { key: "volume_up" },
+      });
+    });
+    el.querySelector(".btn-vol-down")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.app.send?.({
+        type: "portal_device_action",
+        deviceId: this.deviceId || this.id,
+        platform: isApple ? "ios" : "android",
+        action: "key",
+        params: { key: "volume_down" },
+      });
+    });
+    el.querySelector(".btn-power")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.isLocked = !this.isLocked;
+      screenContainer.classList.toggle("phone-screen-locked", this.isLocked);
+      this.app.send?.({
+        type: "portal_device_action",
+        deviceId: this.deviceId || this.id,
+        platform: isApple ? "ios" : "android",
+        action: "key",
+        params: { key: "lock" },
+      });
+    });
+
+    // Botões de navegação inferiores
+    el.querySelector(".btn-back")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (this.viewEl && typeof this.viewEl.goBack === "function" && this.viewEl.canGoBack()) {
+        this.viewEl.goBack();
+      }
+      this.app.send?.({
+        type: "portal_device_action",
+        deviceId: this.deviceId || this.id,
+        platform: "android",
+        action: "key",
+        params: { key: "back" },
+      });
+    });
+    const triggerHome = (e) => {
+      e.stopPropagation();
+      this.app.send?.({
+        type: "portal_device_action",
+        deviceId: this.deviceId || this.id,
+        platform: isApple ? "ios" : "android",
+        action: "key",
+        params: { key: "home" },
+      });
+    };
+    el.querySelector(".btn-home")?.addEventListener("click", triggerHome);
+    el.querySelector(".phone-home-indicator")?.addEventListener("click", triggerHome);
+    el.querySelector(".btn-recents")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.app.send?.({
+        type: "portal_device_action",
+        deviceId: this.deviceId || this.id,
+        platform: "android",
+        action: "key",
+        params: { key: "recents" },
+      });
+    });
+
+    // Controle tátil e gestos de toque/deslize (swipe)
+    let touchStart = null;
+    screenContainer.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      touchStart = { x: e.clientX, y: e.clientY, time: Date.now() };
+    });
+    screenContainer.addEventListener("pointerup", (e) => {
+      if (!touchStart) return;
+      const dx = e.clientX - touchStart.x;
+      const dy = e.clientY - touchStart.y;
+      const dt = Date.now() - touchStart.time;
+      touchStart = null;
+      if (dt < 600 && (Math.abs(dx) > 30 || Math.abs(dy) > 30)) {
+        const direction = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
+        this.app.send?.({
+          type: "portal_device_action",
+          deviceId: this.deviceId || this.id,
+          platform: isApple ? "ios" : "android",
+          action: "swipe",
+          params: { direction, dx, dy },
+        });
+      }
     });
 
     // Maximize / Elevate button

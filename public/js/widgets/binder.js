@@ -514,15 +514,21 @@ class BinderWidget extends BasePortalWidget {
   }
 
   _promptRename() {
-    const nm = prompt("Nome do Fichário (permite persistir mesmo vazio como quadro Kanban):", this.title);
-    if (nm !== null) {
-      const trimmed = nm.trim();
-      this.title = trimmed;
-      this.named = !!trimmed;
-      if (this.titleEl) this.titleEl.textContent = this.title || "Fichário";
-      if (this.app?.sendUpdateNode) {
-        this.app.sendUpdateNode(this.id, { title: this.title, named: this.named });
+    const handleRename = (nm) => {
+      if (nm !== null && nm !== undefined) {
+        const trimmed = nm.trim();
+        this.title = trimmed;
+        this.named = !!trimmed;
+        if (this.titleEl) this.titleEl.textContent = this.title || "Fichário";
+        if (this.app?.sendUpdateNode) {
+          this.app.sendUpdateNode(this.id, { title: this.title, named: this.named });
+        }
       }
+    };
+    if (window.promptDialog) {
+      window.promptDialog("Nome do Fichário (permite persistir mesmo vazio como quadro Kanban):", this.title, handleRename);
+    } else {
+      handleRename(this.title);
     }
   }
 

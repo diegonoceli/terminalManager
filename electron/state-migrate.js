@@ -20,8 +20,10 @@ function nowIso() {
 
 function toWorkspace(wf, fallbackName) {
   const name = (wf && wf.name) || fallbackName;
+  const wsId = (wf && wf.id) || "ws_default";
+  const groundFloorId = "floor_ground_" + wsId;
   return {
-    id: (wf && wf.id) || "ws_default",
+    id: wsId,
     name,
     icon: (wf && wf.icon) || "",
     workingDir: (wf && wf.workingDir) || "",
@@ -30,6 +32,12 @@ function toWorkspace(wf, fallbackName) {
     groups: Array.isArray(wf && wf.groups) ? wf.groups : [],
     nodes: Array.isArray(wf && wf.nodes) ? wf.nodes : [],
     connections: Array.isArray(wf && wf.connections) ? wf.connections : [],
+    cableTies: Array.isArray(wf && wf.cableTies) ? wf.cableTies : [],
+    floors: Array.isArray(wf && wf.floors) && wf.floors.length > 0 ? wf.floors : [
+      { id: groundFloorId, name: "Térreo", isGroundFloor: true, branch: "main", canvasTransform: { x: 0, y: 0, zoom: 1 }, hooks: { setup: [], run: [], teardown: [] } }
+    ],
+    activeFloorId: (wf && wf.activeFloorId) || groundFloorId,
+    drafts: (wf && typeof wf.drafts === "object" && wf.drafts !== null) ? wf.drafts : {},
     createdAt: (wf && wf.createdAt) || nowIso(),
     updatedAt: (wf && wf.updatedAt) || nowIso(),
     lastActiveAt: (wf && typeof wf.lastActiveAt === "number") ? wf.lastActiveAt : 0,

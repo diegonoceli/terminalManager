@@ -83,12 +83,12 @@
 
 ### Implementation for User Story 4
 
-- [ ] T014 [US4] Criar classe `BinderWidget` com container de nota ativa e abas verticais na borda direita em `public/js/widgets/binder.js`
-- [ ] T015 [P] [US4] Implementar estilos visuais do Fichário (abas sobrepostas, cores, scroll suave de abas) em `public/styles.css`
-- [ ] T016 [US4] Implementar ação de contexto "Colocar no Fichário" na seleção múltipla de notas em `public/js/main.js` e `public/js/widgets/binder.js`
-- [ ] T017 [P] [US4] Implementar drag-in de notas sobre o Fichário e drag-out a partir das abas para recriar post-its livres no canvas em `public/js/widgets/binder.js`
-- [ ] T018 [US4] Implementar persistência de Fichários nomeados vazios e dissolução automática de fichários anônimos em `public/js/widgets/binder.js` e `electron/terminal-manager.js`
-- [ ] T019 [P] [US4] Suportar conexão de cabos a Fichários com concatenação de conteúdo para leitura por agentes em `electron/terminal-manager.js` e `public/js/connections.js`
+- [X] T014 [US4] Criar classe `BinderWidget` com container de nota ativa e abas verticais na borda direita em `public/js/widgets/binder.js`
+- [X] T015 [P] [US4] Implementar estilos visuais do Fichário (abas sobrepostas, cores, scroll suave de abas) em `public/styles.css`
+- [X] T016 [US4] Implementar ação de contexto "Colocar no Fichário" na seleção múltipla de notas em `public/js/main.js` e `public/js/widgets/binder.js`
+- [X] T017 [P] [US4] Implementar drag-in de notas sobre o Fichário e drag-out a partir das abas para recriar post-its livres no canvas em `public/js/widgets/binder.js`
+- [X] T018 [US4] Implementar persistência de Fichários nomeados vazios e dissolução automática de fichários anônimos em `public/js/widgets/binder.js` e `electron/terminal-manager.js`
+- [X] T019 [P] [US4] Suportar conexão de cabos a Fichários com concatenação de conteúdo para leitura por agentes em `electron/terminal-manager.js` e `public/js/connections.js`
 
 **Checkpoint**: Fichários totalmente interativos servindo como agrupadores e colunas de fluxo de trabalho.
 
@@ -102,9 +102,9 @@
 
 ### Implementation for User Story 5
 
-- [ ] T020 [US5] Implementar renderização e manipulação de `folders` (expansíveis/recolhíveis com drop de workspaces) em `public/js/workspace-sidebar.js`
-- [ ] T021 [P] [US5] Implementar renderização de divisores de `groups` rotulados na lista da barra lateral em `public/js/workspace-sidebar.js`
-- [ ] T022 [US5] Persistir hierarquia de pastas e grupos no `state.json` em `electron/terminal-manager.js`
+- [X] T020 [US5] Implementar renderização e manipulação de `folders` (expansíveis/recolhíveis com drop de workspaces) em `public/js/workspace-sidebar.js`
+- [X] T021 [P] [US5] Implementar renderização de divisores de `groups` rotulados na lista da barra lateral em `public/js/workspace-sidebar.js`
+- [X] T022 [US5] Persistir hierarquia de pastas e grupos no `state.json` em `electron/terminal-manager.js`
 
 **Checkpoint**: Barra lateral estruturada com pastas e grupos.
 
@@ -118,9 +118,9 @@
 
 ### Implementation for User Story 6
 
-- [ ] T023 [US6] Registrar protocolo `maestri://open` e listener `open-url` no macOS em `electron/main.js`
-- [ ] T024 [P] [US6] Implementar gerador de metadados do Spotlight indexando notas, terminais e workspaces em `electron/main.js`
-- [ ] T025 [US6] Implementar foco animado com pulso visual no canvas ao receber evento `focus_node` em `public/js/main.js`
+- [X] T023 [US6] Registrar protocolo `maestri://open` e listener `open-url` no macOS em `electron/main.js`
+- [X] T024 [P] [US6] Implementar gerador de metadados do Spotlight indexando notas, terminais e workspaces em `electron/main.js`
+- [X] T025 [US6] Implementar foco animado com pulso visual no canvas ao receber evento `focus_node` em `public/js/main.js`
 
 **Checkpoint**: Busca global via Spotlight integrada ao ecossistema macOS.
 
@@ -130,8 +130,8 @@
 
 **Purpose**: Testes automatizados, verificação de regressão e garantia de qualidade
 
-- [ ] T026 [P] Criar teste automatizado headless com Electron cobrindo a mini barra lateral, atalhos de editor, Fichários e notas em `scratch/test-workspaces-nav.cjs`
-- [ ] T027 Executar verificação de sintaxe `node -c` em todos os arquivos modificados e validar inicialização limpa
+- [X] T026 [P] Criar teste automatizado headless com Electron cobrindo a mini barra lateral, atalhos de editor, Fichários e notas em `scratch/test-workspaces-nav.cjs`
+- [X] T027 Executar verificação de sintaxe `node -c` em todos os arquivos modificados e validar inicialização limpa
 
 ---
 

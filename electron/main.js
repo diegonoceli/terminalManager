@@ -1,16 +1,60 @@
-import { app, BrowserWindow, ipcMain, Notification, shell, dialog } from "electron";
+import { app, BrowserWindow, ipcMain, Notification, shell, dialog, session } from "electron";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, watch, readdirSync } from "node:fs";
+import { homedir } from "node:os";
+import { execFile, exec } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { TerminalManager } from "./terminal-manager.js";
-import { detectAgents } from "./agent-cli.js";
+import { detectAgents, executeMaestriCli } from "./agent-cli.js";
 import { readDir, fsCrud, gitOps, gitDiff, gitGraph, readFileText, writeFileText, fileSearch } from "./filetree-service.js";
+import { updateSpotlightIndex } from "./spotlight-service.js";
+import { DeviceManager } from "./device-manager.js";
+import { discoverRoles } from "./roles.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 let manager = null;
+const deviceManager = new DeviceManager();
 const windows = new Set();
 let mainWindow = null;
+
+let instructionWatcher = null;
+let isSyncingInstructions = false;
+
+function setupInstructionWatcher() {
+  if (instructionWatcher) {
+    try { instructionWatcher.close(); } catch {}
+    instructionWatcher = null;
+  }
+  const ws = manager ? manager.currentWorkspace() : null;
+  if (!ws || !ws.workingDir || !ws.instructions?.syncBetween || !existsSync(ws.workingDir)) return;
+
+  try {
+    instructionWatcher = watch(ws.workingDir, (eventType, filename) => {
+      if (isSyncingInstructions) return;
+      if (filename === "CLAUDE.md" || filename === "AGENTS.md") {
+        isSyncingInstructions = true;
+        setTimeout(() => {
+          try {
+            const claudePath = join(ws.workingDir, "CLAUDE.md");
+            const agentsPath = join(ws.workingDir, "AGENTS.md");
+            if (filename === "CLAUDE.md" && existsSync(claudePath)) {
+              const content = readFileSync(claudePath, "utf8");
+              writeFileSync(agentsPath, content, "utf8");
+              manager.setWorkspaceInstructions(ws.id, { claudeMd: content, agentsMd: content, syncBetween: true });
+            } else if (filename === "AGENTS.md" && existsSync(agentsPath)) {
+              const content = readFileSync(agentsPath, "utf8");
+              writeFileSync(claudePath, content, "utf8");
+              manager.setWorkspaceInstructions(ws.id, { claudeMd: content, agentsMd: content, syncBetween: true });
+            }
+          } catch {}
+          isSyncingInstructions = false;
+        }, 300);
+      }
+    });
+  } catch {}
+}
 
 function broadcast(msg) {
   const payload = JSON.stringify(msg);
@@ -43,6 +87,7 @@ function showNotification({ id, title, body }) {
 }
 
 function broadcastLayout() {
+  const currentWs = manager ? manager.currentWorkspace() : null;
   broadcast({
     type: "layout",
     nodes: manager.listNodes(),
@@ -55,10 +100,19 @@ function broadcastLayout() {
     ui: manager.ui,
     settings: manager.settings,
     roles: manager.settings.roles || [],
+    floors: currentWs?.floors || [],
+    activeFloorId: currentWs?.activeFloorId || (currentWs ? `floor_ground_${currentWs.id}` : "floor_ground_default"),
+    cableTies: currentWs?.cableTies || [],
+    canvasGroups: currentWs?.groups || [],
+    drafts: currentWs?.drafts || {},
     // Legacy "Floor/Workflow" (1 release) — removido após US1
     activeWorkflowId: manager.activeWorkspaceId,
     workflows: manager.listWorkflows(),
   });
+  if (app && app.isReady()) {
+    updateSpotlightIndex(manager, app.getPath("userData"));
+    setupInstructionWatcher();
+  }
 }
 
 function handleMessage(msg) {
@@ -173,8 +227,20 @@ function handleMessage(msg) {
       manager.deleteFolder(msg.folderId);
       broadcastLayout();
       break;
+    case "folder_rename":
+      manager.renameFolder(msg.folderId, msg.name);
+      broadcastLayout();
+      break;
     case "folder_toggle":
       manager.toggleFolder(msg.folderId, msg.collapsed);
+      broadcastLayout();
+      break;
+    case "folder_add_workspace":
+      manager.addWorkspaceToFolder(msg.folderId, msg.workspaceId);
+      broadcastLayout();
+      break;
+    case "folder_remove_workspace":
+      manager.removeWorkspaceFromFolder(msg.workspaceId);
       broadcastLayout();
       break;
     case "folders_save":
@@ -195,6 +261,10 @@ function handleMessage(msg) {
       break;
     case "group_delete":
       manager.deleteGroup(msg.groupId);
+      broadcastLayout();
+      break;
+    case "group_rename":
+      manager.renameGroup(msg.groupId, msg.name);
       broadcastLayout();
       break;
     case "groups_save":
@@ -285,6 +355,25 @@ function handleMessage(msg) {
         .catch(() => broadcast({ type: "ghostty_theme", canceled: true }));
       break;
     }
+    case "list_custom_themes": {
+      const themesDir = join(homedir(), ".maestri", "terminal", "themes");
+      const list = [];
+      if (existsSync(themesDir)) {
+        try {
+          const files = readdirSync(themesDir, { withFileTypes: true });
+          for (const f of files) {
+            if (f.isFile() && f.name.endsWith(".json")) {
+              try {
+                const content = JSON.parse(readFileSync(join(themesDir, f.name), "utf8"));
+                list.push({ name: f.name.replace(/\.json$/i, ""), theme: content });
+              } catch {}
+            }
+          }
+        } catch {}
+      }
+      broadcast({ type: "custom_themes_list", themes: list });
+      break;
+    }
     case "agent_list_request":
       broadcast({ type: "agent_list", agents: detectAgents() });
       break;
@@ -347,8 +436,8 @@ function handleMessage(msg) {
       break;
     }
     case "note_read": {
-      const content = manager.noteRead(msg.nodeId);
-      broadcast({ type: "note_read_result", nodeId: msg.nodeId, content });
+      const content = manager.noteRead(msg.nodeId, { chain: !!msg.chain });
+      broadcast({ type: "note_read_result", nodeId: msg.nodeId, content, chain: !!msg.chain });
       break;
     }
     case "note_content":
@@ -466,6 +555,313 @@ function handleMessage(msg) {
         }
       }
       break;
+    case "terminal_selected":
+      manager.setTerminalSelected(msg.terminalId, msg.selected);
+      break;
+    case "agent_msg_send": {
+      const res = manager.sendAgentMessage(msg.fromTerminalId, msg.toTerminalId, msg.prompt);
+      broadcast({ type: "agent_msg_sent", ...res });
+      break;
+    }
+    case "cli_execute": {
+      executeMaestriCli(msg.args || [], { manager, deviceManager }).then((result) => {
+        broadcast({ type: "cli_result", reqId: msg.reqId, ...result });
+      });
+      break;
+    }
+    case "role_discover": {
+      const dir = msg.workingDir || manager.currentWorkspace()?.workingDir;
+      const discovered = discoverRoles(dir);
+      broadcast({ type: "roles_discovered", roles: discovered });
+      break;
+    }
+    case "portal_device_list":
+      deviceManager.listDevices().then((devices) => {
+        broadcast({ type: "portal_device_list_result", devices });
+      });
+      break;
+    case "portal_device_boot":
+      deviceManager.bootDevice(msg.deviceId, msg.platform).then((res) => {
+        broadcast({ type: "portal_device_boot_result", ...res, deviceId: msg.deviceId });
+      });
+      break;
+    case "portal_device_action":
+      deviceManager.performAction(msg.deviceId, msg.platform, msg.action, msg.params).then((res) => {
+        broadcast({ type: "portal_device_action_result", ...res, deviceId: msg.deviceId });
+      });
+      break;
+    case "portal_device_tree":
+      deviceManager.getAccessibilityTree(msg.deviceId, msg.platform).then((res) => {
+        broadcast({ type: "portal_device_tree_result", ...res, deviceId: msg.deviceId });
+      });
+      break;
+    case "portal_sync_cookies": {
+      const fromPart = msg.fromPartition;
+      const toPart = msg.toPartition;
+      if (fromPart && toPart && session) {
+        const sFrom = session.fromPartition(fromPart);
+        const sTo = session.fromPartition(toPart);
+        sFrom.cookies.get({}).then(async (cookies) => {
+          for (const c of cookies) {
+            const protocol = c.secure ? "https://" : "http://";
+            const domain = c.domain && c.domain.startsWith(".") ? c.domain.slice(1) : (c.domain || "localhost");
+            const url = `${protocol}${domain}${c.path || "/"}`;
+            await sTo.cookies.set({
+              url,
+              name: c.name,
+              value: c.value,
+              domain: c.domain,
+              path: c.path,
+              secure: c.secure,
+              httpOnly: c.httpOnly,
+              expirationDate: c.expirationDate,
+            }).catch(() => {});
+          }
+          broadcast({ type: "portal_sync_cookies_result", ok: true, from: fromPart, to: toPart });
+        }).catch((err) => {
+          broadcast({ type: "portal_sync_cookies_result", ok: false, error: err.message });
+        });
+      }
+      break;
+    }
+    case "portal_action_response": {
+      if (manager && typeof manager.handlePortalActionResponse === "function") {
+        manager.handlePortalActionResponse(msg);
+      }
+      break;
+    }
+    case "floor_create": {
+      const ws = manager.workspaces.get(msg.workspaceId) || manager.currentWorkspace();
+      if (ws) {
+        if (!Array.isArray(ws.floors)) ws.floors = [];
+        const floorId = `floor_${randomUUID().slice(0, 8)}`;
+        const floorDir = ws.workingDir ? join(ws.workingDir, ".maestri", "floors", floorId) : "";
+        const newFloor = {
+          id: floorId,
+          name: msg.name || `Andar ${ws.floors.length + 1}`,
+          branch: msg.branch || "main",
+          floorPath: floorDir,
+          isGroundFloor: false,
+          canvasTransform: { x: 0, y: 0, zoom: 1 },
+          hooks: msg.hooks || { setup: [], run: [], teardown: [] },
+        };
+        if (ws.workingDir && existsSync(ws.workingDir)) {
+          try {
+            mkdirSync(join(ws.workingDir, ".maestri", "floors"), { recursive: true });
+            if (process.platform === "darwin") {
+              execFile("cp", ["-c", "-R", ws.workingDir, floorDir], () => {});
+            } else {
+              const branchName = msg.branch || `floor-${floorId}`;
+              execFile("git", ["worktree", "add", "-b", branchName, floorDir], { cwd: ws.workingDir }, (err) => {
+                if (err) {
+                  execFile("cp", ["-R", ws.workingDir, floorDir], () => {});
+                }
+              });
+            }
+          } catch {}
+        }
+        if (msg.cloneGroundLayout) {
+          const groundNodes = (ws.nodes || []).map((n) => ({ ...n, id: `node_${randomUUID().slice(0, 8)}`, floorId }));
+          ws.nodes = [...ws.nodes, ...groundNodes];
+        }
+        ws.floors.push(newFloor);
+        ws.activeFloorId = floorId;
+        manager.saveLayout();
+        broadcastLayout();
+      }
+      break;
+    }
+    case "floor_switch": {
+      const ws = manager.currentWorkspace();
+      if (ws && Array.isArray(ws.floors) && ws.floors.some((f) => f.id === msg.floorId)) {
+        ws.activeFloorId = msg.floorId;
+        manager.saveLayout();
+        broadcastLayout();
+      }
+      break;
+    }
+    case "floor_delete": {
+      const ws = manager.currentWorkspace();
+      if (ws && Array.isArray(ws.floors)) {
+        const target = ws.floors.find((f) => f.id === msg.floorId);
+        if (target && !target.isGroundFloor) {
+          ws.floors = ws.floors.filter((f) => f.id !== msg.floorId);
+          if (ws.activeFloorId === msg.floorId) {
+            const ground = ws.floors.find((f) => f.isGroundFloor) || ws.floors[0];
+            ws.activeFloorId = ground ? ground.id : null;
+          }
+          manager.saveLayout();
+          broadcastLayout();
+        }
+      }
+      break;
+    }
+    case "floor_hook_run": {
+      const ws = manager.currentWorkspace();
+      const floor = ws?.floors?.find((f) => f.id === msg.floorId) || ws?.floors?.[0];
+      if (!floor) {
+        broadcast({ type: "floor_hook_result", floorId: msg.floorId, ok: false, error: "Andar não encontrado." });
+        break;
+      }
+      const hooksList = floor.hooks?.[msg.hookType] || [];
+      const cmd = Array.isArray(hooksList) ? hooksList.join(" && ") : hooksList;
+      if (!cmd || !cmd.trim()) {
+        broadcast({
+          type: "floor_hook_result",
+          floorId: floor.id,
+          hookType: msg.hookType,
+          ok: true,
+          output: "Nenhum comando configurado para este hook.",
+        });
+        break;
+      }
+      const targetDir = floor.floorPath && existsSync(floor.floorPath) ? floor.floorPath : (ws.workingDir || process.cwd());
+      const env = {
+        ...process.env,
+        MAESTRI_FLOOR_NAME: floor.name || "",
+        MAESTRI_FLOOR_ID: floor.id || "",
+        MAESTRI_FLOOR_BRANCH: floor.branch || "",
+        MAESTRI_WORKSPACE_DIR: ws.workingDir || "",
+      };
+      exec(cmd, { cwd: targetDir, env }, (err, stdout, stderr) => {
+        broadcast({
+          type: "floor_hook_result",
+          floorId: floor.id,
+          hookType: msg.hookType,
+          ok: !err,
+          output: (stdout || "") + (stderr ? "\n" + stderr : ""),
+          error: err ? err.message : null,
+        });
+      });
+      break;
+    }
+    case "floor_landing_preview": {
+      const ws = manager.currentWorkspace();
+      const floor = ws?.floors?.find((f) => f.id === msg.floorId);
+      const ground = ws?.floors?.find((f) => f.isGroundFloor) || ws?.floors?.[0];
+      const repoDir = ws?.workingDir || process.cwd();
+      const groundBranch = ground?.branch || "main";
+      const floorBranch = floor?.branch || "main";
+
+      if (!floor || floor.isGroundFloor) {
+        broadcast({ type: "floor_landing_preview_result", floorId: msg.floorId, ok: false, error: "O andar térreo não requer aterrissagem." });
+        break;
+      }
+
+      execFile("git", ["log", `${groundBranch}..${floorBranch}`, "--oneline"], { cwd: repoDir }, (err1, stdoutCommits) => {
+        const commits = (stdoutCommits || "").trim().split("\n").filter(Boolean);
+        execFile("git", ["diff", `${groundBranch}...${floorBranch}`], { cwd: repoDir }, (err2, stdoutDiff) => {
+          execFile("git", ["merge-tree", groundBranch, floorBranch], { cwd: repoDir }, (err3, stdoutTree) => {
+            const hasConflict = (stdoutTree || "").includes("<<<<<<<");
+            broadcast({
+              type: "floor_landing_preview_result",
+              floorId: floor.id,
+              groundBranch,
+              floorBranch,
+              commits,
+              diff: stdoutDiff || "(Nenhuma alteração de código detectada)",
+              hasConflict,
+              ok: true,
+            });
+          });
+        });
+      });
+      break;
+    }
+    case "floor_landing_merge": {
+      const ws = manager.currentWorkspace();
+      const floor = ws?.floors?.find((f) => f.id === msg.floorId);
+      const ground = ws?.floors?.find((f) => f.isGroundFloor) || ws?.floors?.[0];
+      const repoDir = ws?.workingDir || process.cwd();
+      const groundBranch = ground?.branch || "main";
+      const floorBranch = floor?.branch || "main";
+
+      execFile("git", ["checkout", groundBranch], { cwd: repoDir }, (errCheckout) => {
+        if (errCheckout) {
+          broadcast({ type: "floor_landing_merge_result", floorId: msg.floorId, ok: false, error: errCheckout.message });
+          return;
+        }
+        execFile("git", ["merge", floorBranch, "--no-ff", "-m", `Landing floor ${floor?.name || ''} (${floorBranch}) into ${groundBranch}`], { cwd: repoDir }, (errMerge, stdout, stderr) => {
+          if (errMerge) {
+            broadcast({ type: "floor_landing_merge_result", floorId: msg.floorId, ok: false, error: errMerge.message + (stderr ? ": " + stderr : "") });
+          } else {
+            if (floor?.hooks?.teardown?.length) {
+              const teardownCmd = Array.isArray(floor.hooks.teardown) ? floor.hooks.teardown.join(" && ") : floor.hooks.teardown;
+              exec(teardownCmd, { cwd: repoDir });
+            }
+            if (ground) ws.activeFloorId = ground.id;
+            manager.saveLayout();
+            broadcastLayout();
+            broadcast({ type: "floor_landing_merge_result", floorId: msg.floorId, ok: true, output: stdout || "Merge concluído com sucesso!" });
+          }
+        });
+      });
+      break;
+    }
+    case "cable_tie_create":
+    case "cable_tie_delete": {
+      const ws = manager.currentWorkspace();
+      if (ws) {
+        if (!Array.isArray(ws.cableTies)) ws.cableTies = [];
+        if (msg.type === "cable_tie_create") {
+          ws.cableTies.push({
+            id: msg.id || `tie_${randomUUID().slice(0, 8)}`,
+            floorId: ws.activeFloorId,
+            connectionIds: msg.connectionIds || [],
+            positionRatio: msg.positionRatio || 0.5,
+          });
+        } else {
+          ws.cableTies = ws.cableTies.filter((t) => t.id !== msg.id);
+        }
+        manager.saveLayout();
+        broadcastLayout();
+      }
+      break;
+    }
+    case "prompt_draft_save": {
+      const ws = manager.currentWorkspace();
+      if (ws && msg.terminalId) {
+        if (!ws.drafts) ws.drafts = {};
+        ws.drafts[msg.terminalId] = {
+          text: msg.text || "",
+          pills: msg.pills || [],
+          updatedAt: new Date().toISOString(),
+        };
+        manager.saveLayout();
+      }
+      break;
+    }
+    case "prompt_draft_get": {
+      const ws = manager.currentWorkspace();
+      const draft = ws?.drafts?.[msg.terminalId] || null;
+      broadcast({ type: "prompt_draft_loaded", terminalId: msg.terminalId, draft });
+      break;
+    }
+    case "canvas_group_create": {
+      const ws = manager.currentWorkspace();
+      if (ws) {
+        if (!Array.isArray(ws.groups)) ws.groups = [];
+        const gid = msg.id || `grp_${randomUUID().slice(0, 8)}`;
+        ws.groups.push({
+          id: gid,
+          title: msg.title || `Grupo ${ws.groups.length + 1}`,
+          memberNodeIds: msg.memberNodeIds || [],
+          floorId: ws.activeFloorId,
+        });
+        manager.saveLayout();
+        broadcastLayout();
+      }
+      break;
+    }
+    case "canvas_group_delete": {
+      const ws = manager.currentWorkspace();
+      if (ws && Array.isArray(ws.groups)) {
+        ws.groups = ws.groups.filter((g) => g.id !== msg.groupId);
+        manager.saveLayout();
+        broadcastLayout();
+      }
+      break;
+    }
     default:
       break;
   }
@@ -507,29 +903,80 @@ function createWindow() {
     console.log(`[Renderer] ${message} (${sourceId}:${line})`);
   });
 
+  win.webContents.on("did-finish-load", () => {
+    if (pendingUrl) {
+      setTimeout(() => {
+        openFromUrl(pendingUrl);
+        pendingUrl = null;
+      }, 250);
+    }
+  });
+
   win.loadFile(join(__dirname, "..", "public", "index.html"));
 }
 
-function openFromUrl(url) {
+let pendingUrl = null;
+
+function openFromUrl(rawUrl) {
   try {
-    const u = new URL(url);
-    const wsId = u.searchParams.get("workspace");
+    if (!rawUrl || typeof rawUrl !== "string") return;
+    const u = new URL(rawUrl);
+    let wsId = u.searchParams.get("workspace");
+    let nodeId = u.searchParams.get("node");
+
+    if (!wsId && u.hostname === "workspace") {
+      const parts = u.pathname.split("/").filter(Boolean);
+      wsId = parts[0];
+      if (parts[1] === "node") nodeId = parts[2];
+    } else if (!wsId && u.pathname) {
+      const parts = u.pathname.split("/").filter(Boolean);
+      const wsIdx = parts.indexOf("workspace");
+      if (wsIdx >= 0 && parts[wsIdx + 1]) wsId = parts[wsIdx + 1];
+      const nodeIdx = parts.indexOf("node");
+      if (nodeIdx >= 0 && parts[nodeIdx + 1]) nodeId = parts[nodeIdx + 1];
+    }
+
+    if (!wsId && manager) {
+      if (nodeId) {
+        for (const [id, ws] of manager.workspaces.entries()) {
+          if ((ws.nodes || []).some((n) => n.id === nodeId)) {
+            wsId = id;
+            break;
+          }
+        }
+      }
+      if (!wsId) wsId = manager.activeWorkspaceId;
+    }
+
     if (wsId && manager && manager.workspaces.has(wsId)) {
-      manager.switchWorkspace(wsId);
-      broadcastLayout();
-      if (mainWindow) {
+      if (manager.activeWorkspaceId !== wsId) {
+        manager.switchWorkspace(wsId);
+        broadcastLayout();
+      }
+      if (mainWindow && !mainWindow.isDestroyed()) {
         if (mainWindow.isMinimized()) mainWindow.restore();
         mainWindow.show();
         mainWindow.focus();
       }
+      if (nodeId) {
+        setTimeout(() => {
+          broadcast({ type: "focus_node", nodeId, workspaceId: wsId });
+        }, 220);
+      }
     }
-  } catch {}
+  } catch (err) {
+    console.error("openFromUrl error:", err);
+  }
 }
 
 // Deep link maestri:// (Spotlight / navegador) — FR-051
 app.on("open-url", (e, url) => {
   e.preventDefault();
-  openFromUrl(url);
+  if (manager && mainWindow) {
+    openFromUrl(url);
+  } else {
+    pendingUrl = url;
+  }
 });
 
 app.whenReady().then(() => {
@@ -543,6 +990,10 @@ app.whenReady().then(() => {
   manager.setBroadcast(broadcast);
   manager.setNotify(showNotification);
   manager.restore();
+  updateSpotlightIndex(manager, app.getPath("userData"), true);
+
+  const argvUrl = process.argv.find((a) => typeof a === "string" && a.startsWith("maestri://"));
+  if (argvUrl) pendingUrl = argvUrl;
 
   if (process.defaultApp) {
     if (process.argv.length >= 2) {

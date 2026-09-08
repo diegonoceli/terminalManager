@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "updatedAt": "2026-09-08T19:29:01.135Z",
+  "roles": {
+    "role": "Dev Frontend",
+    "description": "Responsável pelo dashboard React",
+    "responsibilities": [
+      "Criar componentes",
+      "Estilizar com CSS"
+    ]
+  }
+}

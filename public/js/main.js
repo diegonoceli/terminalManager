@@ -29,6 +29,18 @@ if (typeof FloatingDock === "function") {
   app.floatingDock = new FloatingDock(document.body, app);
 }
 
+if (typeof FloorManager === "function") {
+  app.floorManager = new FloorManager(app);
+}
+
+if (typeof PromptComposer === "function") {
+  app.promptComposer = new PromptComposer(app);
+}
+
+if (typeof BatutaSearch === "function") {
+  app.batuta = new BatutaSearch(app);
+}
+
 
 app.motion = {
   isReduced() {
@@ -142,8 +154,20 @@ function handleMessage(msg) {
     case "layout":
       app.workspaces = msg.workspaces || [];
       app.ui = msg.ui || {};
+      app.folders = msg.folders || app.ui.folders || [];
+      app.groups = msg.groups || app.ui.sections || [];
+      if (!app.ui.folders) app.ui.folders = app.folders;
+      if (!app.ui.sections) app.ui.sections = app.groups;
       app.settings = msg.settings || {};
       app.roles = msg.roles || [];
+      app.floors = msg.floors || [];
+      app.activeFloorId = msg.activeFloorId || null;
+      if (app.floorManager) {
+        app.floorManager.syncFloors(app.floors, app.activeFloorId);
+      }
+      app.cableTies = msg.cableTies || [];
+      app.canvasGroups = msg.canvasGroups || [];
+      app.drafts = msg.drafts || {};
       const activeWs = msg.activeWorkspaceId || msg.activeWorkflowId;
       app.activeWorkspaceId = activeWs;
       // UI de workspaces (sidebar) usa v3; seletor de floors legado usa v2
@@ -181,6 +205,27 @@ function handleMessage(msg) {
     case "node_created":
       ensureNode(msg.node, true);
       break;
+    case "binder_created":
+      ensureNode(msg.node, true);
+      break;
+    case "binder_updated": {
+      const b = app.widgets.get(msg.node?.id);
+      if (b && typeof b.updateBinderData === "function") {
+        b.updateBinderData(msg.node);
+      }
+      break;
+    }
+    case "binder_page_removed": {
+      if (msg.binder) {
+        const b = app.widgets.get(msg.binder.id);
+        if (b && typeof b.updateBinderData === "function") {
+          b.updateBinderData(msg.binder);
+        }
+      } else if (msg.removed) {
+        removeWidget(msg.binderId, true);
+      }
+      break;
+    }
     case "output":
       app.widgets.get(msg.id)?.write?.(msg.data);
       if (app.connections) {
@@ -207,6 +252,13 @@ function handleMessage(msg) {
       if (app.connections) {
         app.connections.add(msg.connection);
       }
+      if (msg.connection) {
+        const fromW = app.widgets.get(msg.connection.from);
+        const toW = app.widgets.get(msg.connection.to);
+        if (fromW && toW && typeof fromW.syncSessionWith === "function") {
+          fromW.syncSessionWith(toW);
+        }
+      }
       break;
     case "connection_removed":
       if (app.connections) {
@@ -224,6 +276,10 @@ function handleMessage(msg) {
         setActive(msg.id);
         focusTerminal(w, true);
       }
+      break;
+    }
+    case "focus_node": {
+      focusCanvasNode(msg.nodeId, msg.workspaceId);
       break;
     }
     case "dir_picked":
@@ -305,6 +361,11 @@ function handleMessage(msg) {
       if (typeof app._onSearchResults === "function") {
         app._onSearchResults(msg.query, msg.matches || []);
       }
+      for (const w of app.widgets.values()) {
+        if (w.type === "file-tree" && typeof w.onSearchResults === "function") {
+          w.onSearchResults(msg.matches || []);
+        }
+      }
       break;
     case "workspace_export_result":
       toast(msg.ok ? `Workspace exportado: ${msg.path}` : msg.canceled ? "Exportação cancelada." : `Erro ao exportar: ${msg.error}`);
@@ -334,6 +395,62 @@ function handleMessage(msg) {
       }
       break;
     }
+    case "roles_discovered": {
+      showDiscoveredRolesModal(msg.roles || []);
+      break;
+    }
+    case "portal_action": {
+      const { actionId, portalId, action, args = [] } = msg;
+      const w = app.widgets.get(portalId);
+      if (!w) {
+        app.send({ type: "portal_action_response", actionId, ok: false, error: `Portal ${portalId} não encontrado no canvas ativo` });
+        break;
+      }
+      (async () => {
+        try {
+          let output = "";
+          if (action === "navigate") {
+            w.navigate(args[0]);
+            output = `Navegado para ${args[0]}`;
+          } else if (action === "click") {
+            const res = await w.clickSelector(args[0]);
+            output = res ? `Clicado em ${args[0]}` : `Elemento não encontrado: ${args[0]}`;
+          } else if (action === "type") {
+            const res = await w.typeSelector(args[0], args.slice(1).join(" "));
+            output = res ? `Digitado no seletor ${args[0]}` : `Elemento não encontrado: ${args[0]}`;
+          } else if (action === "eval") {
+            const res = await w.evalJS(args.join(" "));
+            output = typeof res === "string" ? res : JSON.stringify(res);
+          } else if (action === "dom") {
+            output = await w.getDOM();
+          } else if (action === "screenshot") {
+            output = await w.takeScreenshot();
+          } else if (action === "scroll") {
+            const y = Number(args[0]) || 500;
+            await w.evalJS(`window.scrollBy(0, ${y})`);
+            output = `Rolagem realizada em ${y}px`;
+          } else {
+            output = `Ação desconhecida: ${action}`;
+          }
+          app.send({ type: "portal_action_response", actionId, ok: true, output });
+        } catch (err) {
+          app.send({ type: "portal_action_response", actionId, ok: false, error: err.message });
+        }
+      })();
+      break;
+    }
+    case "floor_hook_result": {
+      app.floorManager?.handleHookResult(msg);
+      break;
+    }
+    case "floor_landing_preview_result": {
+      app.floorManager?.handleLandingPreview(msg);
+      break;
+    }
+    case "floor_landing_merge_result": {
+      app.floorManager?.handleLandingResult(msg);
+      break;
+    }
     default:
       break;
   }
@@ -354,12 +471,20 @@ function syncWorkflowsUI(workflows, activeId) {
 function syncLayout(list) {
   const seen = new Set();
   for (const item of list) {
+    app.nodeData.set(item.id, { ...item });
+  }
+  for (const item of list) {
+    // Notas arquivadas em fichário não são renderizadas soltas no canvas (US4)
+    if (item.type === "note" && item.binderId) continue;
     seen.add(item.id);
     const w = ensureNode(item, true);
     if (w) {
       w.setPosition(item.x, item.y);
       w.setSize(item.width, item.height);
       if (item.title) w.updateTitle(item.title);
+      if (item.type === "binder" && typeof w.updateBinderData === "function") {
+        w.updateBinderData(item);
+      }
     }
   }
   for (const [id] of app.widgets) {
@@ -379,6 +504,8 @@ function ensureNode(data, doFit) {
       w = new EditorWidget({ ...data, app });
     } else if (data.type === "note") {
       w = new NoteWidget({ ...data, app });
+    } else if (data.type === "binder") {
+      w = new BinderWidget({ ...data, app });
     } else if (data.type === "file-tree") {
       w = new FileTreeWidget({ ...data, app });
     } else if (data.type === "text") {
@@ -457,6 +584,10 @@ function setActive(id) {
   if (w) {
     bringNodeToFront(w);
     if (typeof w.focus === "function") w.focus();
+    if (app.promptComposer && app.promptComposer.visible) {
+      app.promptComposer.anchorToTerminal(id);
+      app.promptComposer.loadDraft(id);
+    }
   }
 }
 
@@ -483,6 +614,49 @@ function focusTerminal(w, force = false) {
   });
 }
 app.focusTerminal = focusTerminal;
+
+function focusCanvasNode(nodeId, workspaceId) {
+  if (!nodeId) return;
+
+  const doFocus = () => {
+    let w = app.widgets.get(nodeId);
+
+    // Se não for widget solto, verificar se é página de um Fichário
+    if (!w) {
+      for (const [id, widget] of app.widgets.entries()) {
+        if (widget.item && widget.item.type === "binder" && Array.isArray(widget.item.pageIds)) {
+          if (widget.item.pageIds.includes(nodeId)) {
+            w = widget;
+            if (typeof widget.setActivePage === "function") {
+              widget.setActivePage(nodeId);
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    if (!w) return;
+
+    setActive(w.id || nodeId);
+    focusTerminal(w, true);
+
+    if (w.el) {
+      w.el.classList.add("spotlight-pulse");
+      setTimeout(() => {
+        if (w.el) w.el.classList.remove("spotlight-pulse");
+      }, 2500);
+    }
+  };
+
+  if (workspaceId && workspaceId !== app.activeWorkspaceId) {
+    if (window.WorkspaceSidebar) window.WorkspaceSidebar.switchTo(workspaceId);
+    setTimeout(doFocus, 250);
+  } else {
+    doFocus();
+  }
+}
+app.focusNode = focusCanvasNode;
 
 const focusBtn = document.getElementById("btn-focus");
 function syncFocusBtn() {
@@ -777,6 +951,82 @@ function closeSearch() {
   }
 }
 
+window.promptDialog = function (title, defaultValue, callback) {
+  const root = document.getElementById("modal-root");
+  if (!root) {
+    if (callback) callback(defaultValue || "");
+    return;
+  }
+  root.innerHTML = "";
+  root.classList.remove("hidden");
+
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  const modal = document.createElement("div");
+  modal.className = "modal";
+  modal.style.maxWidth = "380px";
+
+  const h3 = document.createElement("h3");
+  h3.textContent = title;
+  modal.appendChild(h3);
+
+  const input = document.createElement("input");
+  input.className = "input";
+  input.type = "text";
+  input.value = defaultValue || "";
+  input.style.marginTop = "12px";
+  modal.appendChild(input);
+
+  const actions = document.createElement("div");
+  actions.className = "modal-actions";
+  const btnCancel = document.createElement("button");
+  btnCancel.className = "btn";
+  btnCancel.type = "button";
+  btnCancel.textContent = "Cancelar";
+  const btnOk = document.createElement("button");
+  btnOk.className = "btn primary";
+  btnOk.type = "button";
+  btnOk.textContent = "OK";
+
+  const close = () => {
+    root.innerHTML = "";
+    root.classList.add("hidden");
+  };
+
+  btnCancel.addEventListener("click", () => {
+    close();
+    if (callback) callback(null);
+  });
+
+  const submit = () => {
+    const val = input.value;
+    close();
+    if (callback) callback(val);
+  };
+
+  btnOk.addEventListener("click", submit);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      submit();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      close();
+      if (callback) callback(null);
+    }
+  });
+
+  actions.append(btnCancel, btnOk);
+  modal.appendChild(actions);
+  overlay.appendChild(modal);
+  root.appendChild(overlay);
+
+  setTimeout(() => {
+    input.focus();
+    input.select();
+  }, 50);
+};
+
 function openInFileTree(path) {
   let target = null;
   for (const w of app.widgets.values()) {
@@ -901,6 +1151,63 @@ function groupSelection() {
   toast(`Grupo "${group.name}" criado (${ids.length} nós).`);
   renderGroupFrames();
 }
+
+// Ação de contexto "Colocar no Fichário" na seleção múltipla de notas (US4 / T016)
+function openMultiNoteContextMenu(x, y, selectedNotes) {
+  let menu = document.getElementById("multi-selection-menu");
+  if (!menu) {
+    menu = document.createElement("div");
+    menu.id = "multi-selection-menu";
+    menu.className = "ctx-menu hidden";
+    document.body.appendChild(menu);
+  }
+  menu.innerHTML = "";
+  const item = document.createElement("div");
+  item.className = "ctx-item";
+  item.textContent = `📑 Colocar no Fichário (${selectedNotes.length} notas)`;
+  item.addEventListener("click", () => {
+    menu.classList.add("hidden");
+    const b = boundsOf(selectedNotes.map((n) => n.id));
+    const centroidX = Math.round(b.minX);
+    const centroidY = Math.round(b.minY);
+    send({
+      type: "binder_create",
+      noteIds: selectedNotes.map((n) => n.id),
+      x: centroidX,
+      y: centroidY,
+      width: 460,
+      height: 380,
+    });
+    clearSelection();
+    toast(`Fichário criado com ${selectedNotes.length} notas.`);
+  });
+  menu.appendChild(item);
+
+  menu.classList.remove("hidden");
+  menu.style.left = `${Math.min(x, window.innerWidth - 220)}px`;
+  menu.style.top = `${Math.min(y, window.innerHeight - 100)}px`;
+
+  const close = (e) => {
+    if (!menu.contains(e.target)) {
+      menu.classList.add("hidden");
+      document.removeEventListener("pointerdown", close);
+    }
+  };
+  setTimeout(() => document.addEventListener("pointerdown", close), 50);
+}
+
+window.addEventListener("contextmenu", (e) => {
+  if (isTyping(e)) return;
+  const selectedNotes = [...app.selectedIds]
+    .map((id) => app.widgets.get(id))
+    .filter((w) => w && w.type === "note");
+
+  if (selectedNotes.length >= 2) {
+    e.preventDefault();
+    e.stopPropagation();
+    openMultiNoteContextMenu(e.clientX, e.clientY, selectedNotes);
+  }
+});
 
 function dissolveSelected() {
   let changed = false;
@@ -1239,11 +1546,7 @@ window.addEventListener("keyup", (e) => {
 
 /* ---------------- toolbar / botões ---------------- */
 document.getElementById("btn-new")?.addEventListener("click", () => {
-  if (window.Settings && window.Settings.openNewTerminal) {
-    Settings.openNewTerminal();
-  } else {
-    createTerminal();
-  }
+  createTerminal();
 });
 document.getElementById("btn-new-web")?.addEventListener("click", createWebPortal);
 document.getElementById("btn-new-device")?.addEventListener("click", () => {
@@ -1291,19 +1594,21 @@ if (floorSelect) {
 
 document.getElementById("btn-floor-new")?.addEventListener("click", () => {
   const currentCount = (app.workspaces?.length || 1) + 1;
-  const name = prompt("Nome do novo Workspace:", `Workspace ${currentCount}`);
-  if (name && name.trim()) {
-    send({ type: "workspace_create", name: name.trim() });
-  }
+  window.promptDialog("Nome do novo Workspace:", `Workspace ${currentCount}`, (name) => {
+    if (name && name.trim()) {
+      send({ type: "workspace_create", name: name.trim() });
+    }
+  });
 });
 
 document.getElementById("btn-floor-rename")?.addEventListener("click", () => {
   if (!floorSelect) return;
   const currentName = floorSelect.options[floorSelect.selectedIndex]?.text || "Workspace";
-  const name = prompt("Novo nome para o Workspace atual:", currentName);
-  if (name && name.trim()) {
-    send({ type: "workspace_rename", workspaceId: floorSelect.value, name: name.trim() });
-  }
+  window.promptDialog("Novo nome para o Workspace atual:", currentName, (name) => {
+    if (name && name.trim()) {
+      send({ type: "workspace_rename", workspaceId: floorSelect.value, name: name.trim() });
+    }
+  });
 });
 
 document.getElementById("btn-floor-del")?.addEventListener("click", () => {
@@ -1337,31 +1642,251 @@ if (canvasBg) {
   });
 }
 
-/* ---------------- Temas de terminal (US10) ---------------- */
+/* ---------------- Temas de terminal (US3, T019 / FR-019) ---------------- */
 const GLOBAL_THEME_PRESETS = {
+  system: { bg: "#1e1e1e", fg: "#d4d4d4", cursor: "#ffffff", cursorAccent: "#1e1e1e", titlebar: "#252526", titlebarText: "#cccccc", selBg: "#264f78", selFg: "#ffffff" },
   dracula: { bg: "#282a36", fg: "#f8f8f2", cursor: "#f8f8f2", cursorAccent: "#282a36", titlebar: "#1e1f29", titlebarText: "#f8f8f2", selBg: "#44475a", selFg: "#ffffff" },
-  catppuccin: { bg: "#1e1e2e", fg: "#cdd6f4", cursor: "#f5e0dc", cursorAccent: "#1e1e2e", titlebar: "#181825", titlebarText: "#cdd6f4", selBg: "#45475a", selFg: "#ffffff" },
+  catppuccin_mocha: { bg: "#1e1e2e", fg: "#cdd6f4", cursor: "#f5e0dc", cursorAccent: "#1e1e2e", titlebar: "#181825", titlebarText: "#cdd6f4", selBg: "#45475a", selFg: "#ffffff" },
+  catppuccin_latte: { bg: "#eff1f5", fg: "#4c4f69", cursor: "#dc8a78", cursorAccent: "#eff1f5", titlebar: "#e6e9ef", titlebarText: "#4c4f69", selBg: "#acb0be", selFg: "#4c4f69" },
   nord: { bg: "#2e3440", fg: "#d8dee9", cursor: "#eceff4", cursorAccent: "#2e3440", titlebar: "#3b4252", titlebarText: "#eceff4", selBg: "#434c5e", selFg: "#ffffff" },
+  solarized_dark: { bg: "#002b36", fg: "#839496", cursor: "#93a1a1", cursorAccent: "#002b36", titlebar: "#073642", titlebarText: "#93a1a1", selBg: "#073642", selFg: "#eee8d5" },
+  solarized_light: { bg: "#fdf6e3", fg: "#657b83", cursor: "#586e75", cursorAccent: "#fdf6e3", titlebar: "#eee8d5", titlebarText: "#586e75", selBg: "#eee8d5", selFg: "#073642" },
+  monokai_pro: { bg: "#2d2a2e", fg: "#fcfcfa", cursor: "#ffd866", cursorAccent: "#2d2a2e", titlebar: "#221f22", titlebarText: "#fcfcfa", selBg: "#403e41", selFg: "#ffffff" },
+  one_dark: { bg: "#282c34", fg: "#abb2bf", cursor: "#528bff", cursorAccent: "#282c34", titlebar: "#21252b", titlebarText: "#abb2bf", selBg: "#3e4451", selFg: "#ffffff" },
+  one_light: { bg: "#fafafa", fg: "#383a42", cursor: "#526fff", cursorAccent: "#fafafa", titlebar: "#eaeaeb", titlebarText: "#383a42", selBg: "#e0e0e0", selFg: "#383a42" },
+  tokyo_night: { bg: "#1a1b26", fg: "#c0caf5", cursor: "#c0caf5", cursorAccent: "#1a1b26", titlebar: "#16161e", titlebarText: "#c0caf5", selBg: "#283457", selFg: "#ffffff" },
+  tokyo_night_storm: { bg: "#24283b", fg: "#c0caf5", cursor: "#c0caf5", cursorAccent: "#24283b", titlebar: "#1f2335", titlebarText: "#c0caf5", selBg: "#2e3c64", selFg: "#ffffff" },
+  gruvbox_dark: { bg: "#282828", fg: "#ebdbb2", cursor: "#ebdbb2", cursorAccent: "#282828", titlebar: "#1d2021", titlebarText: "#ebdbb2", selBg: "#504945", selFg: "#ebdbb2" },
+  gruvbox_light: { bg: "#fbf1c7", fg: "#3c3836", cursor: "#3c3836", cursorAccent: "#fbf1c7", titlebar: "#ebdbb2", titlebarText: "#3c3836", selBg: "#d5c4a1", selFg: "#3c3836" },
+  material_ocean: { bg: "#0f111a", fg: "#8f93a2", cursor: "#ffcc00", cursorAccent: "#0f111a", titlebar: "#090b10", titlebarText: "#eeffff", selBg: "#1f2233", selFg: "#ffffff" },
+  material_palenight: { bg: "#292d3e", fg: "#a6accd", cursor: "#ffcc00", cursorAccent: "#292d3e", titlebar: "#202331", titlebarText: "#eeffff", selBg: "#343b51", selFg: "#ffffff" },
+  ayu_dark: { bg: "#0a0e14", fg: "#b3b1ad", cursor: "#e6b450", cursorAccent: "#0a0e14", titlebar: "#05070a", titlebarText: "#b3b1ad", selBg: "#273747", selFg: "#ffffff" },
+  ayu_mirage: { bg: "#1f2430", fg: "#cbccc6", cursor: "#ffcc66", cursorAccent: "#1f2430", titlebar: "#191e2a", titlebarText: "#cbccc6", selBg: "#34455a", selFg: "#ffffff" },
+  ayu_light: { bg: "#fafafa", fg: "#5c6166", cursor: "#ff9940", cursorAccent: "#fafafa", titlebar: "#f0f0f0", titlebarText: "#5c6166", selBg: "#d3d6db", selFg: "#5c6166" },
+  cobalt2: { bg: "#193549", fg: "#ffffff", cursor: "#ffc600", cursorAccent: "#193549", titlebar: "#122738", titlebarText: "#ffffff", selBg: "#0050a0", selFg: "#ffffff" },
+  synthwave84: { bg: "#262335", fg: "#f92aad", cursor: "#f92aad", cursorAccent: "#262335", titlebar: "#1e1a29", titlebarText: "#36f9f6", selBg: "#492b58", selFg: "#ffffff" },
+  night_owl: { bg: "#011627", fg: "#d6deeb", cursor: "#7e57c2", cursorAccent: "#011627", titlebar: "#01111d", titlebarText: "#d6deeb", selBg: "#1d3b53", selFg: "#ffffff" },
+  oceanic_next: { bg: "#1b2b34", fg: "#d8dee9", cursor: "#d8dee9", cursorAccent: "#1b2b34", titlebar: "#16242c", titlebarText: "#d8dee9", selBg: "#343d46", selFg: "#ffffff" },
+  github_dark: { bg: "#0d1117", fg: "#c9d1d9", cursor: "#58a6ff", cursorAccent: "#0d1117", titlebar: "#010409", titlebarText: "#c9d1d9", selBg: "#163b70", selFg: "#ffffff" },
+  github_light: { bg: "#ffffff", fg: "#24292f", cursor: "#0969da", cursorAccent: "#ffffff", titlebar: "#f6f8fa", titlebarText: "#24292f", selBg: "#b6e3ff", selFg: "#24292f" },
+  shades_of_purple: { bg: "#2d2b55", fg: "#fad000", cursor: "#fad000", cursorAccent: "#2d2b55", titlebar: "#222044", titlebarText: "#ffffff", selBg: "#b362ff", selFg: "#ffffff" },
+  snazzy: { bg: "#282a36", fg: "#eff0eb", cursor: "#97979b", cursorAccent: "#282a36", titlebar: "#1e2029", titlebarText: "#eff0eb", selBg: "#3e404a", selFg: "#ffffff" },
+  tomorrow_night: { bg: "#1d1f21", fg: "#c5c8c6", cursor: "#c5c8c6", cursorAccent: "#1d1f21", titlebar: "#151718", titlebarText: "#c5c8c6", selBg: "#373b41", selFg: "#ffffff" },
+  andromeda: { bg: "#262a33", fg: "#d5cec8", cursor: "#00e8c6", cursorAccent: "#262a33", titlebar: "#1e222a", titlebarText: "#d5cec8", selBg: "#3a404d", selFg: "#ffffff" },
+  cyberpunk: { bg: "#10101b", fg: "#ff4081", cursor: "#00f0ff", cursorAccent: "#10101b", titlebar: "#08080f", titlebarText: "#00f0ff", selBg: "#ff007f", selFg: "#ffffff" },
+  rose_pine: { bg: "#191724", fg: "#e0def4", cursor: "#eb6f92", cursorAccent: "#191724", titlebar: "#12101b", titlebarText: "#e0def4", selBg: "#403d52", selFg: "#ffffff" },
+  rose_pine_dawn: { bg: "#faf4ed", fg: "#575279", cursor: "#b4637a", cursorAccent: "#faf4ed", titlebar: "#f2e9de", titlebarText: "#575279", selBg: "#dfdad9", selFg: "#575279" }
 };
 
-function themeSelect() {
+let customGhosttyThemes = [];
+
+function populateCustomThemes(themes) {
+  customGhosttyThemes = themes || [];
+  initThemeSelect();
+}
+
+function initThemeSelect() {
   const sel = document.getElementById("theme-select");
-  if (!sel) return null;
-  if (!themeSelect._bound) {
-    themeSelect._bound = true;
+  if (!sel) return;
+  sel.innerHTML = "";
+  
+  const defOpt = document.createElement("option");
+  defOpt.value = "";
+  defOpt.textContent = "Tema terminal (iTerm2 / Ghostty)";
+  sel.appendChild(defOpt);
+
+  const sysOpt = document.createElement("option");
+  sysOpt.value = "system";
+  sysOpt.textContent = "🌓 Seguir Sistema (Auto)";
+  sel.appendChild(sysOpt);
+
+  const groupPresets = document.createElement("optgroup");
+  groupPresets.label = "Temas iTerm2 (30+)";
+  for (const key of Object.keys(GLOBAL_THEME_PRESETS)) {
+    if (key === "system") continue;
+    const opt = document.createElement("option");
+    opt.value = key;
+    opt.textContent = key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+    groupPresets.appendChild(opt);
+  }
+  sel.appendChild(groupPresets);
+
+  if (customGhosttyThemes.length > 0) {
+    const groupGhostty = document.createElement("optgroup");
+    groupGhostty.label = "Temas Ghostty (~/.maestri/terminal/themes/)";
+    for (const gt of customGhosttyThemes) {
+      const opt = document.createElement("option");
+      opt.value = `__ghostty_${gt.name}`;
+      opt.textContent = `Ghostty: ${gt.name}`;
+      groupGhostty.appendChild(opt);
+    }
+    sel.appendChild(groupGhostty);
+  }
+
+  const impOpt = document.createElement("option");
+  impOpt.value = "__import__";
+  impOpt.textContent = "📁 Importar Ghostty (.json)…";
+  sel.appendChild(impOpt);
+
+  if (!sel._bound) {
+    sel._bound = true;
     sel.addEventListener("change", () => {
       const v = sel.value;
       sel.value = "";
       if (v === "__import__") {
         if (app.send) send({ type: "pick_ghostty_theme" });
+      } else if (v.startsWith("__ghostty_")) {
+        const themeName = v.replace("__ghostty_", "");
+        const found = customGhosttyThemes.find(t => t.name === themeName);
+        if (found && found.theme) {
+          const t = found.theme;
+          applyThemeToActive({
+            bg: t.background || "#1e1e1e",
+            fg: t.foreground || "#e6e6e6",
+            cursor: t.cursor || t.foreground || "#ececec",
+            cursorAccent: t.cursor_text || t.background,
+            selBg: t.selection_background || "#264f78",
+            selFg: t.foreground || "#ffffff",
+            titlebar: t.background || "#1e1e1e",
+            titlebarText: t.foreground || "#ffffff"
+          }, found.name);
+        }
+      } else if (v === "system") {
+        const isDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+        applyThemeToActive(isDark ? GLOBAL_THEME_PRESETS.dracula : GLOBAL_THEME_PRESETS.github_light, "Sistema (Auto)");
       } else if (v && GLOBAL_THEME_PRESETS[v]) {
-        applyThemeToActive(GLOBAL_THEME_PRESETS[v], v);
+        applyThemeToActive(GLOBAL_THEME_PRESETS[v], v.replace(/_/g, " "));
       }
     });
+
+    if (window.matchMedia) {
+      window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
+        if (app.activeId) {
+          const w = app.widgets.get(app.activeId);
+          if (w && w.isSystemTheme) {
+            applyThemeToActive(e.matches ? GLOBAL_THEME_PRESETS.dracula : GLOBAL_THEME_PRESETS.github_light, "Sistema (Auto)");
+          }
+        }
+      });
+    }
   }
-  return sel;
 }
-themeSelect();
+
+function showDiscoveredRolesModal(roles) {
+  const existing = document.getElementById("roles-discovered-modal");
+  if (existing) existing.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = "roles-discovered-modal";
+  overlay.className = "modal-overlay";
+  overlay.style.position = "fixed";
+  overlay.style.inset = "0";
+  overlay.style.backgroundColor = "rgba(0, 0, 0, 0.5)";
+  overlay.style.display = "flex";
+  overlay.style.alignItems = "center";
+  overlay.style.justifyContent = "center";
+  overlay.style.zIndex = "1000";
+
+  const box = document.createElement("div");
+  box.className = "modal wide";
+  box.style.background = "var(--panel-bg, #ffffff)";
+  box.style.borderRadius = "10px";
+  box.style.padding = "20px";
+  box.style.width = "480px";
+  box.style.maxHeight = "80vh";
+  box.style.overflowY = "auto";
+  box.style.boxShadow = "0 8px 30px rgba(0,0,0,0.3)";
+
+  const h3 = document.createElement("h3");
+  h3.textContent = "Responsabilidades Descobertas no Repositório";
+  h3.style.margin = "0 0 12px 0";
+  box.appendChild(h3);
+
+  const desc = document.createElement("p");
+  desc.className = "muted";
+  desc.style.fontSize = "12px";
+  desc.style.color = "var(--text-muted, #888)";
+  desc.textContent = roles.length
+    ? `${roles.length} responsabilidade(s) encontrada(s) em arquivos role.json. Clique em Importar para adicioná-las ao workspace:`
+    : "Nenhum arquivo role.json encontrado nos subdiretórios.";
+  box.appendChild(desc);
+
+  const list = document.createElement("div");
+  list.style.display = "flex";
+  list.style.flexDirection = "column";
+  list.style.gap = "8px";
+  list.style.margin = "14px 0";
+
+  for (const role of roles) {
+    const row = document.createElement("div");
+    row.style.display = "flex";
+    row.style.alignItems = "center";
+    row.style.justifyContent = "space-between";
+    row.style.padding = "8px 12px";
+    row.style.background = "var(--titlebar, #f5f5f5)";
+    row.style.borderRadius = "6px";
+
+    const left = document.createElement("div");
+    left.style.display = "flex";
+    left.style.alignItems = "center";
+    left.style.gap = "8px";
+
+    const badge = document.createElement("span");
+    badge.className = "role-badge";
+    badge.textContent = role.name;
+    badge.style.background = role.badgeColor || "#4f46e5";
+    badge.style.color = "#ffffff";
+    badge.style.padding = "2px 8px";
+    badge.style.borderRadius = "4px";
+    badge.style.fontSize = "11px";
+    badge.style.fontWeight = "600";
+    left.appendChild(badge);
+
+    if (role.sourcePath) {
+      const src = document.createElement("span");
+      src.className = "muted";
+      src.style.fontSize = "10px";
+      src.style.color = "#888";
+      src.textContent = role.sourcePath.split("/").slice(-2).join("/");
+      left.appendChild(src);
+    }
+    row.appendChild(left);
+
+    const impBtn = document.createElement("button");
+    impBtn.className = "btn small primary";
+    impBtn.textContent = "Importar";
+    impBtn.addEventListener("click", () => {
+      const existingIdx = (app.roles || []).findIndex(r => r.name === role.name);
+      if (existingIdx >= 0) {
+        app.roles[existingIdx] = { ...role, id: app.roles[existingIdx].id };
+      } else {
+        app.roles.push({ ...role, id: role.id || `role_${Date.now().toString(36)}` });
+      }
+      if (app.send) send({ type: "roles_save", roles: app.roles });
+      for (const w of app.widgets.values()) {
+        if (typeof w.updateRoleBadge === "function") w.updateRoleBadge();
+      }
+      impBtn.disabled = true;
+      impBtn.textContent = "Importado ✓";
+      toast(`Responsabilidade "${role.name}" importada com sucesso.`);
+    });
+    row.appendChild(impBtn);
+    list.appendChild(row);
+  }
+  box.appendChild(list);
+
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "btn";
+  closeBtn.textContent = "Fechar";
+  closeBtn.style.marginTop = "10px";
+  closeBtn.addEventListener("click", () => overlay.remove());
+  box.appendChild(closeBtn);
+
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+}
+
+initThemeSelect();
 
 function applyThemeToActive(style, label) {
   const w = app.activeId ? app.widgets.get(app.activeId) : null;

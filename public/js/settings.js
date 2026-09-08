@@ -112,7 +112,19 @@
       const addBtn = el("button", "btn primary", "");
       addBtn.innerHTML = (window.Icons ? window.Icons.svg("plus", { size: 13 }) : "+ ") + " Nova responsabilidade";
       addBtn.addEventListener("click", () => form(null));
-      box.append(el("div", "role-head", "Responsabilidades disponíveis"), list, addBtn);
+
+      const discBtn = el("button", "btn", "");
+      discBtn.innerHTML = (window.Icons ? window.Icons.svg("search", { size: 13 }) : "🔍 ") + " Descobrir no Repositório";
+      discBtn.addEventListener("click", () => {
+        if (this.send) this.send({ type: "role_discover" });
+      });
+
+      const btnRow = el("div", "role-btn-row");
+      btnRow.style.display = "flex";
+      btnRow.style.gap = "8px";
+      btnRow.append(addBtn, discBtn);
+
+      box.append(el("div", "role-head", "Responsabilidades disponíveis"), list, btnRow);
 
       // Seção de Acessibilidade e Movimento (T027 / US6 / FR-020)
       const motionSection = el("div", "settings-motion-section");

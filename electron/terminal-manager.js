@@ -98,11 +98,18 @@ export class TerminalManager {
       }
       if (Array.isArray(state.roles)) this.settings.roles = state.roles;
       for (const ws of state.workspaces || []) {
+        const groundFloorId = "floor_ground_" + ws.id;
         this.workspaces.set(ws.id, {
           ...ws,
           nodes: Array.isArray(ws.nodes) ? ws.nodes : [],
           connections: Array.isArray(ws.connections) ? ws.connections : [],
           groups: Array.isArray(ws.groups) ? ws.groups : [],
+          cableTies: Array.isArray(ws.cableTies) ? ws.cableTies : [],
+          floors: Array.isArray(ws.floors) && ws.floors.length > 0 ? ws.floors : [
+            { id: groundFloorId, name: "Térreo", isGroundFloor: true, branch: "main", canvasTransform: { x: 0, y: 0, zoom: 1 }, hooks: { setup: [], run: [], teardown: [] } }
+          ],
+          activeFloorId: ws.activeFloorId || groundFloorId,
+          drafts: (typeof ws.drafts === "object" && ws.drafts !== null) ? ws.drafts : {},
         });
       }
       this.activeWorkspaceId =
@@ -117,6 +124,7 @@ export class TerminalManager {
 
   _initDefaultWorkspace() {
     const now = new Date().toISOString();
+    const groundFloorId = "floor_ground_default";
     const defaultWs = {
       id: "ws_default",
       name: "Workspace 1",
@@ -126,6 +134,12 @@ export class TerminalManager {
       groups: [],
       nodes: [],
       connections: [],
+      cableTies: [],
+      floors: [
+        { id: groundFloorId, name: "Térreo", isGroundFloor: true, branch: "main", canvasTransform: { x: 0, y: 0, zoom: 1 }, hooks: { setup: [], run: [], teardown: [] } }
+      ],
+      activeFloorId: groundFloorId,
+      drafts: {},
       createdAt: now,
       updatedAt: now,
       lastActiveAt: 0,
@@ -281,6 +295,7 @@ export class TerminalManager {
   createWorkspace({ name, workingDir = "", icon = "" } = {}) {
     const id = `ws_${randomUUID().slice(0, 8)}`;
     const now = new Date().toISOString();
+    const groundFloorId = `floor_ground_${id}`;
     const ws = {
       id,
       name: name || `Workspace ${this.workspaces.size + 1}`,
@@ -290,6 +305,12 @@ export class TerminalManager {
       groups: [],
       nodes: [],
       connections: [],
+      cableTies: [],
+      floors: [
+        { id: groundFloorId, name: "Térreo", isGroundFloor: true, branch: "main", canvasTransform: { x: 0, y: 0, zoom: 1 }, hooks: { setup: [], run: [], teardown: [] } }
+      ],
+      activeFloorId: groundFloorId,
+      drafts: {},
       createdAt: now,
       updatedAt: now,
       lastActiveAt: 0,
@@ -485,6 +506,10 @@ export class TerminalManager {
     return this.sidebarFolder("delete", { id: folderId });
   }
 
+  renameFolder(folderId, name) {
+    return this.sidebarFolder("rename", { id: folderId, name });
+  }
+
   toggleFolder(folderId, collapsed) {
     return this.sidebarFolder("toggle", { id: folderId, collapsed });
   }
@@ -531,8 +556,13 @@ export class TerminalManager {
     return this.sidebarSection("delete", { id: groupId });
   }
 
+  renameGroup(groupId, name) {
+    return this.sidebarSection("rename", { id: groupId, name });
+  }
+
   deleteWorkspace(workspaceId) {
     if (this.workspaces.size <= 1) return false;
+    this.removeWorkspaceFromFolder(workspaceId);
     const deleted = this.workspaces.delete(workspaceId);
     if (deleted) {
       // Encerra processos vivos daquele workspace
@@ -662,6 +692,23 @@ export class TerminalManager {
         this._flagAttention(id, term, title, "Comando aguardando aprovação/interação.");
         bufferAccumulator = "";
       }
+
+      // Roteamento de resposta inter-agentes autônomo (FR-031, FR-032 / US5)
+      if (term.isCapturingReply && term.waitingReplyFor && !term.isSelected) {
+        term.capturedOutput = (term.capturedOutput || "") + data;
+        clearTimeout(term.replyDebounceTimer);
+        term.replyDebounceTimer = setTimeout(() => {
+          if (term.isCapturingReply && term.waitingReplyFor && !term.isSelected) {
+            const fromTerm = this.terminals.get(term.waitingReplyFor);
+            if (fromTerm && fromTerm.proc) {
+              fromTerm.proc.write(`\r\n\x1b[36m[Resposta de ${term.title || "Agente"}]:\x1b[0m\r\n${term.capturedOutput.trim()}\r\n`);
+            }
+            term.waitingReplyFor = null;
+            term.isCapturingReply = false;
+            term.capturedOutput = "";
+          }
+        }, 2500);
+      }
     });
 
     proc.onExit(({ exitCode }) => {
@@ -705,6 +752,70 @@ export class TerminalManager {
     if (t.roleId) out.roleId = t.roleId;
     if (t.workspaceId) out.workspaceId = t.workspaceId;
     return out;
+  }
+
+  sendAgentMessage(fromTerminalId, toTerminalId, prompt) {
+    let toTerm = this.terminals.get(toTerminalId);
+    if (!toTerm) {
+      for (const t of this.terminals.values()) {
+        if (t.title && t.title.toLowerCase() === toTerminalId.toLowerCase()) {
+          toTerm = t;
+          break;
+        }
+      }
+    }
+    if (!toTerm || !toTerm.proc) {
+      return { ok: false, error: "Terminal de destino não encontrado ou não está em execução." };
+    }
+    toTerm.waitingReplyFor = fromTerminalId;
+    toTerm.capturedOutput = "";
+    toTerm.isCapturingReply = true;
+    toTerm.proc.write(prompt + "\r\n");
+    return { ok: true };
+  }
+
+  async portalAction(portalId, action, args = []) {
+    const actionId = randomUUID();
+    return new Promise((resolve) => {
+      const timeout = setTimeout(() => {
+        if (this._pendingPortalActions) this._pendingPortalActions.delete(actionId);
+        resolve({ ok: false, error: `Timeout aguardando ação ${action} no portal ${portalId}` });
+      }, 6000);
+      if (!this._pendingPortalActions) this._pendingPortalActions = new Map();
+      this._pendingPortalActions.set(actionId, { resolve, timeout });
+      if (this.broadcast) {
+        this.broadcast({ type: "portal_action", actionId, portalId, action, args });
+      } else {
+        clearTimeout(timeout);
+        this._pendingPortalActions.delete(actionId);
+        resolve({ ok: true, output: `[Headless] Ação ${action} simulada no portal ${portalId}` });
+      }
+    });
+  }
+
+  handlePortalActionResponse(msg) {
+    if (!msg || !msg.actionId) return;
+    const entry = this._pendingPortalActions?.get(msg.actionId);
+    if (entry) {
+      clearTimeout(entry.timeout);
+      this._pendingPortalActions.delete(msg.actionId);
+      entry.resolve({ ok: msg.ok !== false, output: msg.output, error: msg.error });
+    }
+  }
+
+  setTerminalSelected(terminalId, isSelected) {
+    const term = this.terminals.get(terminalId);
+    if (!term) return;
+    term.isSelected = !!isSelected;
+    if (term.isSelected) {
+      term.waitingReplyFor = null;
+      term.isCapturingReply = false;
+      term.capturedOutput = "";
+      term.attentionSent = false;
+      if (this.broadcast) {
+        this.broadcast({ type: "attention_cleared", nodeId: terminalId });
+      }
+    }
   }
 
   /* ---------------- Nós espaciais (portais/editor/notas/árvore/desenho/texto) ---------------- */
@@ -771,6 +882,9 @@ export class TerminalManager {
       if (!ws.nodes.some((n) => n.id === id)) ws.nodes.push(node);
     }
     this.nodes.set(id, node);
+    if (type === "note" && nodeData.content) {
+      setTimeout(() => this.noteWrite(id, nodeData.content), 20);
+    }
     this.saveLayout();
     return node;
   }
@@ -781,14 +895,44 @@ export class TerminalManager {
     const node = this.nodes.get(nodeId);
     if (node && node.workspaceId === this.activeWorkspaceId) return node;
     const ws = this.currentWorkspace();
-    if (ws) {
-      const n = (ws.nodes || []).find((x) => x.id === nodeId);
-      if (n && n.type === "note") return n;
-    }
-    return null;
+    return (ws && ws.nodes ? ws.nodes.find((n) => n.id === nodeId && (n.type === "note" || n.type === "binder")) : null) || null;
   }
 
-  noteRead(nodeId) {
+  noteRead(nodeIdOrName, { chain = false } = {}) {
+    let targetId = nodeIdOrName;
+    const ws = this.currentWorkspace();
+    const foundNode = (ws?.nodes || []).find(
+      (n) => n.id === nodeIdOrName || (n.title && n.title.toLowerCase() === String(nodeIdOrName).toLowerCase())
+    );
+    if (foundNode) targetId = foundNode.id;
+
+    if (!chain) {
+      return this._readSingleNote(targetId);
+    }
+
+    const visited = new Set();
+    const results = [];
+
+    const traverse = (currId) => {
+      if (!currId || visited.has(currId)) return;
+      visited.add(currId);
+      const content = this._readSingleNote(currId);
+      const currNode = (ws?.nodes || []).find((n) => n.id === currId);
+      const title = currNode?.title || currId;
+      results.push(`## ${title}\n\n${content}`);
+
+      for (const conn of this.connections.values()) {
+        if (conn.from === currId && !visited.has(conn.to)) {
+          traverse(conn.to);
+        }
+      }
+    };
+
+    traverse(targetId);
+    return results.join("\n\n---\n\n");
+  }
+
+  _readSingleNote(nodeId) {
     const node = this.nodes.get(nodeId);
     if (node && node.type === "binder") {
       return this.binderRead(nodeId);
@@ -878,7 +1022,7 @@ export class TerminalManager {
 
   binderCreate(data = {}) {
     const named = !!(data.title && data.title.trim());
-    const noteIds = Array.isArray(data.noteIds) ? [...data.noteIds] : [];
+    const noteIds = Array.isArray(data.noteIds) ? [...data.noteIds] : (Array.isArray(data.pageIds) ? [...data.pageIds] : []);
     const binder = this.createNode({
       id: data.id || `binder_${randomUUID().slice(0, 8)}`,
       type: "binder",
@@ -1143,6 +1287,12 @@ export class TerminalManager {
     return conn;
   }
 
+  /** Alias for addConnection — matches the createXxx naming convention used in the rest of the API. */
+  createConnection(opts) {
+    return this.addConnection(opts);
+  }
+
+
   /** Classifica a conexão pela natureza dos extremos (FR-034..036 / data-model §6). */
   _classifyConnection(from, to) {
     const info = (id) => {
@@ -1217,6 +1367,11 @@ export class TerminalManager {
       term.roleId = roleId || null;
       const cfg = (ws.nodes || []).find((n) => n.id === nodeId && (n.type === "terminal" || !n.type));
       if (cfg) cfg.roleId = roleId || null;
+      if (term.cwd && term.cwd !== ws.workingDir && role) {
+        try {
+          writeRolesSidecar(term.cwd, [role], ws.id);
+        } catch {}
+      }
     } else {
       const node = this.nodes.get(nodeId);
       if (node && node.workspaceId === this.activeWorkspaceId) {

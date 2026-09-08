@@ -25,6 +25,54 @@ class Canvas {
     this.viewport.addEventListener("click", (e) => this._onClick(e));
     this.viewport.addEventListener("dblclick", (e) => this._onDblClick(e));
 
+    // Drag-and-drop de arquivos .md, .markdown e .txt do Finder (US4, T026 / FR-025)
+    this.viewport.addEventListener("dragover", (e) => {
+      if (e.dataTransfer && e.dataTransfer.types && Array.from(e.dataTransfer.types).includes("Files")) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+      }
+    });
+    this.viewport.addEventListener("drop", async (e) => {
+      if (!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) return;
+      const files = Array.from(e.dataTransfer.files).filter((f) => {
+        const name = (f.name || "").toLowerCase();
+        return name.endsWith(".md") || name.endsWith(".markdown") || name.endsWith(".txt");
+      });
+      if (!files.length) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      let offset = 0;
+      for (const file of files) {
+        const name = file.name.replace(/\.(md|markdown|txt)$/i, "");
+        let text = "";
+        try {
+          text = await file.text();
+        } catch {}
+        const pt = this.screenToWorld(e.clientX + offset, e.clientY + offset);
+        offset += 30;
+        if (window.app && window.app.send) {
+          window.app.send({
+            type: "create_node",
+            node: {
+              type: "note",
+              title: name || "Nota",
+              content: text,
+              x: Math.round(pt.x),
+              y: Math.round(pt.y),
+              width: 360,
+              height: 300,
+              filePath: file.path || undefined,
+              internal: !file.path,
+            },
+          });
+        }
+      }
+      if (typeof window.toast === "function") {
+        window.toast(`${files.length} nota(s) importada(s) do Finder.`);
+      }
+    });
+
     window.addEventListener("keydown", (e) => {
       if (e.code === "Space" && !this._isEditingText(e.target) && !this._spacePressed) {
         this._spacePressed = true;
@@ -75,6 +123,194 @@ class Canvas {
 
   screenToWorldDelta(dsx, dsy) {
     return { x: dsx / this.zoom, y: dsy / this.zoom };
+  }
+
+  /** Transição de perspectiva 3D para troca e visualização de andares (T041 / FR-035). */
+  transitionFloor3D(direction = "up", callback) {
+    const world = this.world;
+    if (!world) {
+      if (callback) callback();
+      return;
+    }
+    const angle = direction === "up" ? 18 : -18;
+    const tz = -250;
+
+    world.style.transition = "transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.32s ease";
+    world.style.transform = `translate(${this.tx}px, ${this.ty}px) scale(${this.zoom * 0.9}) perspective(1000px) rotateX(${angle}deg) translateZ(${tz}px)`;
+    world.style.opacity = "0.2";
+
+    setTimeout(() => {
+      if (callback) callback();
+      world.style.transform = `translate(${this.tx}px, ${this.ty}px) scale(${this.zoom * 0.9}) perspective(1000px) rotateX(${-angle}deg) translateZ(${tz}px)`;
+      requestAnimationFrame(() => {
+        world.style.transition = "transform 0.38s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.38s ease";
+        world.style.transform = `translate(${this.tx}px, ${this.ty}px) scale(${this.zoom})`;
+        world.style.opacity = "1";
+        setTimeout(() => {
+          world.style.transition = "";
+          this.apply();
+        }, 380);
+      });
+    }, 320);
+  }
+
+  /** Navegação suave de câmera com translação e zoom para um nó ou ponto (T051 / FR-048). */
+  panTo(targetX, targetY, targetZoom = null, duration = 400) {
+    const startTx = this.tx;
+    const startTy = this.ty;
+    const startZoom = this.zoom;
+    const endZoom = targetZoom !== null ? targetZoom : this.zoom;
+
+    const endTx = (this.viewport.clientWidth / 2) - (targetX * endZoom);
+    const endTy = (this.viewport.clientHeight / 2) - (targetY * endZoom);
+
+    const startTime = performance.now();
+    const animate = (now) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(1, elapsed / duration);
+      const ease = 1 - Math.pow(1 - progress, 3);
+
+      this.tx = startTx + (endTx - startTx) * ease;
+      this.ty = startTy + (endTy - startTy) * ease;
+      this.zoom = startZoom + (endZoom - startZoom) * ease;
+      this.apply();
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+    };
+    requestAnimationFrame(animate);
+  }
+
+  /* ---- Magnetic Tile Snapping (Ctrl + Drag) & Spatial Alignment ---- */
+  computeMagneticSnap(activeWidget, rawX, rawY, widgets, threshold = 24) {
+    let bestX = Math.round(rawX / 20) * 20;
+    let bestY = Math.round(rawY / 20) * 20;
+    let minDx = threshold + 1;
+    let minDy = threshold + 1;
+
+    const myW = activeWidget?.worldSize?.width || activeWidget?.width || 360;
+    const myH = activeWidget?.worldSize?.height || activeWidget?.height || 260;
+
+    if (widgets && widgets.size) {
+      for (const w of widgets.values()) {
+        if (!w || w.id === activeWidget?.id || !w.worldPos) continue;
+        const ox = w.worldPos.x;
+        const oy = w.worldPos.y;
+        const ow = w.worldSize?.width || w.width || 360;
+        const oh = w.worldSize?.height || w.height || 260;
+
+        const xCandidates = [ox, ox + ow, ox - myW, ox + ow - myW];
+        for (const cx of xCandidates) {
+          const diff = Math.abs(rawX - cx);
+          if (diff < minDx) {
+            minDx = diff;
+            bestX = cx;
+          }
+        }
+
+        const yCandidates = [oy, oy + oh, oy - myH, oy + oh - myH];
+        for (const cy of yCandidates) {
+          const diff = Math.abs(rawY - cy);
+          if (diff < minDy) {
+            minDy = diff;
+            bestY = cy;
+          }
+        }
+      }
+    }
+
+    return { x: bestX, y: bestY };
+  }
+
+  arrangeGrid(widgetsList, startX = 60, startY = 60, gap = 24, cols = 3) {
+    if (!widgetsList || !widgetsList.length) return;
+    let col = 0;
+    let row = 0;
+    let maxHeightInRow = 0;
+    let curX = startX;
+    let curY = startY;
+
+    for (let i = 0; i < widgetsList.length; i++) {
+      const w = widgetsList[i];
+      if (!w || typeof w.setPosition !== "function") continue;
+      const ww = w.worldSize?.width || w.width || 360;
+      const wh = w.worldSize?.height || w.height || 260;
+
+      w.setPosition(curX, curY);
+      maxHeightInRow = Math.max(maxHeightInRow, wh);
+
+      col++;
+      if (col >= cols) {
+        col = 0;
+        row++;
+        curX = startX;
+        curY += maxHeightInRow + gap;
+        maxHeightInRow = 0;
+      } else {
+        curX += ww + gap;
+      }
+    }
+  }
+
+  alignNodes(widgetsList, alignment) {
+    if (!widgetsList || widgetsList.length < 2) return;
+    const boxes = widgetsList.map((w) => ({
+      w,
+      x: w.worldPos?.x ?? 0,
+      y: w.worldPos?.y ?? 0,
+      width: w.worldSize?.width || w.width || 360,
+      height: w.worldSize?.height || w.height || 260,
+    }));
+
+    switch (alignment) {
+      case "left": {
+        const minX = Math.min(...boxes.map((b) => b.x));
+        boxes.forEach((b) => b.w.setPosition(minX, b.y));
+        break;
+      }
+      case "centerH": {
+        const avgCenterX = boxes.reduce((acc, b) => acc + (b.x + b.width / 2), 0) / boxes.length;
+        boxes.forEach((b) => b.w.setPosition(avgCenterX - b.width / 2, b.y));
+        break;
+      }
+      case "right": {
+        const maxRight = Math.max(...boxes.map((b) => b.x + b.width));
+        boxes.forEach((b) => b.w.setPosition(maxRight - b.width, b.y));
+        break;
+      }
+      case "top": {
+        const minY = Math.min(...boxes.map((b) => b.y));
+        boxes.forEach((b) => b.w.setPosition(b.x, minY));
+        break;
+      }
+      case "centerV": {
+        const avgCenterY = boxes.reduce((acc, b) => acc + (b.y + b.height / 2), 0) / boxes.length;
+        boxes.forEach((b) => b.w.setPosition(b.x, avgCenterY - b.height / 2));
+        break;
+      }
+      case "bottom": {
+        const maxBottom = Math.max(...boxes.map((b) => b.y + b.height));
+        boxes.forEach((b) => b.w.setPosition(b.x, maxBottom - b.height));
+        break;
+      }
+      case "distributeH": {
+        boxes.sort((a, b) => a.x - b.x);
+        const minX = boxes[0].x;
+        const maxX = boxes[boxes.length - 1].x;
+        const step = (maxX - minX) / (boxes.length - 1);
+        boxes.forEach((b, i) => b.w.setPosition(minX + i * step, b.y));
+        break;
+      }
+      case "distributeV": {
+        boxes.sort((a, b) => a.y - b.y);
+        const minY = boxes[0].y;
+        const maxY = boxes[boxes.length - 1].y;
+        const step = (maxY - minY) / (boxes.length - 1);
+        boxes.forEach((b, i) => b.w.setPosition(b.x, minY + i * step));
+        break;
+      }
+    }
   }
 
   setZoom(z, cx, cy) {

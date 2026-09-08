@@ -41,6 +41,7 @@ class FileTreeWidget extends BasePortalWidget {
         <div class="portal-icon">${window.Icons ? window.Icons.svg("file-tree", { size: 14 }) : "🗂"}</div>
         <div class="portal-title">${this.title}</div>
         <div class="ft-actions">
+          <button class="ft-btn ft-search icon-btn" title="Buscar arquivos ou conteúdo (Ctrl+P)">${window.Icons ? window.Icons.svg("search", { size: 13 }) : "🔍"}</button>
           <button class="ft-btn ft-list icon-btn" title="Lista">${window.Icons ? window.Icons.svg("file-text", { size: 13 }) : "☰"}</button>
           <button class="ft-btn ft-grid icon-btn" title="Grade de ícones">${window.Icons ? window.Icons.svg("grid", { size: 13 }) : "▦"}</button>
           <button class="ft-btn ft-diff icon-btn" title="Diff (uncommitted)">${window.Icons ? window.Icons.svg("git-commit", { size: 13 }) : "±"}</button>
@@ -51,6 +52,10 @@ class FileTreeWidget extends BasePortalWidget {
         </div>
       </div>
       <div class="ft-pathbar" title="caminho atual"></div>
+      <div class="ft-search-bar hidden">
+        <input type="text" class="ft-search-input" placeholder="Buscar arquivo… (> para conteúdo)" />
+        <div class="ft-search-results hidden"></div>
+      </div>
       <div class="ft-body"></div>
       <div class="spatial-resize-handle"></div>
       <div class="conn-port conn-port-left" title="Conectar nó"></div>
@@ -77,6 +82,7 @@ class FileTreeWidget extends BasePortalWidget {
       e.stopPropagation();
       if (this.app.removeNode) this.app.removeNode(this.id);
     });
+    el.querySelector(".ft-search").addEventListener("click", (e) => { e.stopPropagation(); this.toggleSearch(); });
     el.querySelector(".ft-list").addEventListener("click", (e) => { e.stopPropagation(); this.setView("list"); });
     el.querySelector(".ft-grid").addEventListener("click", (e) => { e.stopPropagation(); this.setView("grid"); });
     el.querySelector(".ft-diff").addEventListener("click", (e) => { e.stopPropagation(); this.setView("diff"); });
@@ -85,6 +91,30 @@ class FileTreeWidget extends BasePortalWidget {
     el.querySelector(".ft-branch").addEventListener("click", (e) => {
       e.stopPropagation();
       this._openGitMenu(e.clientX, e.clientY);
+    });
+
+    const searchInput = el.querySelector(".ft-search-input");
+    let searchDebounce = null;
+    searchInput.addEventListener("input", () => {
+      clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(() => this.runSearch(searchInput.value), 250);
+    });
+    searchInput.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        this.toggleSearch();
+      } else if (e.key === "Enter") {
+        this.runSearch(searchInput.value);
+      }
+    });
+
+    // Atalho Ctrl+P no nó da árvore para busca fuzzy / busca interna (T034 / FR-033)
+    el.addEventListener("keydown", (e) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && !e.shiftKey && e.key.toLowerCase() === "p") {
+        e.preventDefault();
+        e.stopPropagation();
+        this.toggleSearch();
+      }
     });
   }
 
@@ -378,6 +408,7 @@ class FileTreeWidget extends BasePortalWidget {
         indentWithTabs: false,
       });
       this.cm.on("change", () => scheduleSave(save));
+      this._setupCodeMirrorQuote();
     } else {
       this.cm = null;
       ta.style.width = "100%";
@@ -385,6 +416,216 @@ class FileTreeWidget extends BasePortalWidget {
       ta.addEventListener("input", () => scheduleSave(save));
     }
     back.addEventListener("click", () => this.closeEditor());
+  }
+
+  /* ---- Citação de Código para Agentes (T033 / US6 / FR-034) ---- */
+  _setupCodeMirrorQuote() {
+    if (!this.cm) return;
+    let quoteBtn = this.el.querySelector(".ft-quote-float");
+    if (!quoteBtn) {
+      quoteBtn = document.createElement("button");
+      quoteBtn.className = "ft-quote-float btn small primary";
+      quoteBtn.style.position = "absolute";
+      quoteBtn.style.zIndex = "50";
+      quoteBtn.style.display = "none";
+      quoteBtn.style.boxShadow = "0 4px 12px rgba(0,0,0,0.25)";
+      quoteBtn.innerHTML = (window.Icons ? window.Icons.svg("message-square", { size: 12 }) : "💬 ") + " Citar para Agente";
+      this.el.appendChild(quoteBtn);
+
+      quoteBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const selection = this.cm.getSelection();
+        if (!selection) return;
+        const from = this.cm.getCursor("from");
+        const to = this.cm.getCursor("to");
+        const fname = this.currentFile ? this.currentFile.split("/").pop() : "arquivo";
+        const snippet = `Em \`${fname}\` (L${from.line + 1}-L${to.line + 1}):\n\`\`\`\n${selection}\n\`\`\`\n`;
+        this._quoteToAgent(snippet);
+        quoteBtn.style.display = "none";
+      });
+    }
+
+    this.cm.on("cursorActivity", () => {
+      const sel = this.cm.getSelection();
+      if (!sel || !sel.trim()) {
+        quoteBtn.style.display = "none";
+        return;
+      }
+      const coords = this.cm.cursorCoords(true, "window");
+      const nodeRect = this.el.getBoundingClientRect();
+      quoteBtn.style.left = `${Math.max(10, coords.left - nodeRect.left)}px`;
+      quoteBtn.style.top = `${Math.max(30, coords.top - nodeRect.top - 32)}px`;
+      quoteBtn.style.display = "inline-flex";
+    });
+  }
+
+  _quoteToAgent(snippet) {
+    let targetTerm = null;
+    if (this.app?.connections?.connections) {
+      for (const conn of this.app.connections.connections.values()) {
+        if (conn.from === this.id || conn.to === this.id) {
+          const otherId = conn.from === this.id ? conn.to : conn.from;
+          const other = this.app.widgets?.get(otherId);
+          if (other && (other.type === "terminal" || !other.type)) {
+            targetTerm = other;
+            break;
+          }
+        }
+      }
+    }
+    if (!targetTerm && this.app?.activeId) {
+      const active = this.app.widgets?.get(this.app.activeId);
+      if (active && (active.type === "terminal" || !active.type)) {
+        targetTerm = active;
+      }
+    }
+
+    if (targetTerm && this.app?.sendInput) {
+      this.app.sendInput(targetTerm.id, snippet);
+      if (typeof window.toast === "function") {
+        toast(`Trecho citado para o terminal "${targetTerm.titleText || targetTerm.title || targetTerm.id}".`);
+      }
+      if (this.app?.connections?.triggerPulse) {
+        this.app.connections.triggerPulse(this.id, targetTerm.id);
+      }
+    } else {
+      navigator.clipboard.writeText(snippet);
+      if (typeof window.toast === "function") {
+        toast("Trecho copiado para a área de transferência (nenhum agente conectado).");
+      }
+    }
+  }
+
+  /* ---- Busca Fuzzy e Busca Interna no Nó (T034 / US6 / FR-033) ---- */
+  toggleSearch() {
+    const bar = this.el.querySelector(".ft-search-bar");
+    const input = this.el.querySelector(".ft-search-input");
+    if (!bar || !input) return;
+    const isHidden = bar.classList.contains("hidden");
+    bar.classList.toggle("hidden", !isHidden);
+    if (isHidden) {
+      input.focus();
+      input.select();
+    } else {
+      const res = this.el.querySelector(".ft-search-results");
+      if (res) res.classList.add("hidden");
+    }
+  }
+
+  runSearch(val) {
+    if (!val || !val.trim()) {
+      const res = this.el.querySelector(".ft-search-results");
+      if (res) res.classList.add("hidden");
+      return;
+    }
+    const byContent = val.startsWith(">");
+    const query = byContent ? val.slice(1).trim() : val.trim();
+    if (!query) return;
+    this.send({ type: "file_search", cwd: this.root, query, byContent });
+  }
+
+  onSearchResults(matches) {
+    const res = this.el.querySelector(".ft-search-results");
+    if (!res) return;
+    res.innerHTML = "";
+    if (!matches || !matches.length) {
+      res.innerHTML = '<div class="ft-search-item muted" style="padding:6px 10px; font-size:11px; color:#888;">Nenhum resultado.</div>';
+      res.classList.remove("hidden");
+      return;
+    }
+    for (const m of matches.slice(0, 30)) {
+      const item = document.createElement("div");
+      item.className = "ft-search-item";
+      item.style.padding = "5px 10px";
+      item.style.fontSize = "11.5px";
+      item.style.cursor = "pointer";
+      item.style.borderBottom = "1px solid var(--panel-border, #eee)";
+      const rel = m.path.replace(this.root, "").replace(/^[/\\]/, "");
+      item.textContent = rel;
+      item.title = m.path;
+      item.addEventListener("mouseenter", () => item.style.background = "var(--hover-bg, #f0f0f0)");
+      item.addEventListener("mouseleave", () => item.style.background = "");
+      item.addEventListener("click", () => {
+        this.openFile(m.path);
+        this.toggleSearch();
+      });
+      res.appendChild(item);
+    }
+    res.classList.remove("hidden");
+  }
+
+  /* ---- Quick Look Preview Modal (T031 / US6 / FR-032) ---- */
+  openQuickLook(e) {
+    if (!e || !e.path) return;
+    const existing = document.getElementById("ft-quicklook-modal");
+    if (existing) existing.remove();
+
+    const overlay = document.createElement("div");
+    overlay.id = "ft-quicklook-modal";
+    overlay.className = "modal-overlay";
+    overlay.style.position = "fixed";
+    overlay.style.inset = "0";
+    overlay.style.backgroundColor = "rgba(0, 0, 0, 0.6)";
+    overlay.style.display = "flex";
+    overlay.style.alignItems = "center";
+    overlay.style.justifyContent = "center";
+    overlay.style.zIndex = "2000";
+
+    const box = document.createElement("div");
+    box.className = "modal";
+    box.style.background = "var(--panel-bg, #ffffff)";
+    box.style.borderRadius = "10px";
+    box.style.padding = "16px";
+    box.style.maxWidth = "80vw";
+    box.style.maxHeight = "80vh";
+    box.style.overflow = "auto";
+    box.style.boxShadow = "0 10px 40px rgba(0,0,0,0.4)";
+
+    const title = document.createElement("h4");
+    title.textContent = e.name;
+    title.style.margin = "0 0 10px 0";
+    box.appendChild(title);
+
+    const isImg = /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i.test(e.name);
+    if (isImg) {
+      const img = document.createElement("img");
+      img.src = `file://${e.path}`;
+      img.style.maxWidth = "100%";
+      img.style.maxHeight = "65vh";
+      img.style.borderRadius = "6px";
+      box.appendChild(img);
+    } else {
+      const pre = document.createElement("pre");
+      pre.className = "ft-pre";
+      pre.style.maxHeight = "60vh";
+      pre.style.overflow = "auto";
+      pre.textContent = "Carregando conteúdo…";
+      box.appendChild(pre);
+
+      fetch(`file://${e.path}`)
+        .then(r => r.text())
+        .then(txt => { pre.textContent = txt.slice(0, 50000); })
+        .catch(() => { pre.textContent = "(Arquivo binário ou não legível)"; });
+    }
+
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "btn";
+    closeBtn.textContent = "Fechar (Esc)";
+    closeBtn.style.marginTop = "10px";
+    closeBtn.addEventListener("click", () => overlay.remove());
+    box.appendChild(closeBtn);
+
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+
+    const onKey = (ev) => {
+      if (ev.key === "Escape" || ev.code === "Space") {
+        ev.preventDefault();
+        overlay.remove();
+        document.removeEventListener("keydown", onKey);
+      }
+    };
+    document.addEventListener("keydown", onKey);
   }
 
   closeEditor() {
