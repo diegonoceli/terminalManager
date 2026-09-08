@@ -1,5 +1,5 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan:
-specs/005-workflow-nodes-connections/plan.md
+specs/006-maestri-spatial-orchestration/plan.md
 <!-- SPECKIT END -->

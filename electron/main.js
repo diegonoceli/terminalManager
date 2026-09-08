@@ -1,7 +1,9 @@
-import { app, BrowserWindow, ipcMain, Notification, shell } from "electron";
+import { app, BrowserWindow, ipcMain, Notification, shell, dialog } from "electron";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { TerminalManager } from "./terminal-manager.js";
+import { detectAgents } from "./agent-cli.js";
+import { readDir, fsCrud, gitOps, gitDiff, gitGraph } from "./filetree-service.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -45,7 +47,13 @@ function broadcastLayout() {
     nodes: manager.listNodes(),
     terminals: manager.list(), // legacy compatibility
     connections: manager.listConnections(),
-    activeWorkflowId: manager.activeWorkflowId,
+    activeWorkspaceId: manager.activeWorkspaceId,
+    workspaces: manager.listWorkspaces(),
+    ui: manager.ui,
+    settings: manager.settings,
+    roles: manager.settings.roles || [],
+    // Legacy "Floor/Workflow" (1 release) — removido após US1
+    activeWorkflowId: manager.activeWorkspaceId,
     workflows: manager.listWorkflows(),
   });
 }
@@ -101,6 +109,76 @@ function handleMessage(msg) {
     case "update_node":
       manager.updateNodeConfig(msg.id, msg.config);
       break;
+    case "dir_pick": {
+      const opts = {
+        title: "Selecionar diretório do workspace",
+        properties: ["openDirectory", "createDirectory"],
+      };
+      dialog.showOpenDialog(opts).then((result) => {
+        broadcast({
+          type: "dir_picked",
+          canceled: result.canceled,
+          path: result.canceled ? null : result.filePaths[0],
+        });
+      }).catch(() => {
+        broadcast({ type: "dir_picked", canceled: true, path: null });
+      });
+      break;
+    }
+    case "workspace_create":
+      manager.createWorkspace({ name: msg.name, workingDir: msg.workingDir, icon: msg.icon });
+      broadcastLayout();
+      break;
+    case "workspace_switch":
+      manager.switchWorkspace(msg.workspaceId);
+      broadcastLayout();
+      break;
+    case "workspace_rename":
+      manager.renameWorkspace(msg.workspaceId, { name: msg.name, icon: msg.icon });
+      broadcastLayout();
+      break;
+    case "workspace_set_dir":
+      manager.setWorkspaceDir(msg.workspaceId, msg.workingDir);
+      broadcastLayout();
+      break;
+    case "workspace_delete":
+      manager.deleteWorkspace(msg.workspaceId);
+      broadcastLayout();
+      break;
+    case "workspace_instructions":
+      manager.setWorkspaceInstructions(msg.workspaceId, {
+        claudeMd: msg.content && msg.content.claudeMd,
+        agentsMd: msg.content && msg.content.agentsMd,
+        syncBetween: msg.syncBetween,
+      });
+      broadcastLayout();
+      break;
+    case "sidebar_folder":
+      manager.sidebarFolder(msg.action, msg);
+      broadcastLayout();
+      break;
+    case "sidebar_section":
+      manager.sidebarSection(msg.action, msg);
+      broadcastLayout();
+      break;
+    case "sidebar_collapse":
+      manager.updateUi({ sidebar: { ...(manager.ui.sidebar || {}), collapsed: !!msg.collapsed } });
+      broadcastLayout();
+      break;
+    case "settings_save":
+      manager.updateSettings(msg.settings || {});
+      broadcastLayout();
+      break;
+    case "agent_list_request":
+      broadcast({ type: "agent_list", agents: detectAgents() });
+      break;
+    case "roles_save":
+      manager.saveRoles(msg.roles || []);
+      broadcastLayout();
+      break;
+    case "role_assign":
+      manager.assignRole(msg.nodeId, msg.roleId);
+      break;
     case "workflow_create":
       manager.createWorkflow(msg.name);
       broadcastLayout();
@@ -138,6 +216,50 @@ function handleMessage(msg) {
         broadcast({ type: "connection_removed", id: msg.id });
       }
       break;
+    case "note_read": {
+      const content = manager.noteRead(msg.nodeId);
+      broadcast({ type: "note_read_result", nodeId: msg.nodeId, content });
+      break;
+    }
+    case "note_content":
+      manager.noteWrite(msg.nodeId, msg.content);
+      break;
+    case "note_move": {
+      const filePath = manager.noteMoveToProject(msg.nodeId);
+      broadcast({ type: "note_moved", nodeId: msg.nodeId, filePath, internal: false, ok: !!filePath });
+      break;
+    }
+    case "note_pinned":
+      manager.noteSetPinned(msg.nodeId, !!msg.pinned);
+      break;
+    case "fs_read_dir": {
+      const res = readDir(msg.path);
+      broadcast({ type: "fs_dir_result", nodeId: msg.nodeId, path: msg.path, ...res });
+      break;
+    }
+    case "fs_crud": {
+      const res = fsCrud(msg.action, { path: msg.path, newName: msg.newName, toPath: msg.toPath });
+      broadcast({ type: "fs_crud_result", nodeId: msg.nodeId, action: msg.action, ok: res.ok, error: res.error || null });
+      break;
+    }
+    case "git_ops": {
+      gitOps(msg.cwd, msg.action, { branch: msg.branch, message: msg.message }).then((res) => {
+        broadcast({ type: "git_result", nodeId: msg.nodeId, action: msg.action, ok: res.ok, error: res.error || null, data: res });
+      });
+      break;
+    }
+    case "git_diff": {
+      gitDiff(msg.cwd, msg.file).then((res) => {
+        broadcast({ type: "diff_result", nodeId: msg.nodeId, file: msg.file || null, ok: res.ok, text: res.ok ? res.out : res.err });
+      });
+      break;
+    }
+    case "git_graph": {
+      gitGraph(msg.cwd).then((res) => {
+        broadcast({ type: "graph_result", nodeId: msg.nodeId, ok: res.ok, text: res.ok ? res.out : res.err });
+      });
+      break;
+    }
     case "notify":
       showNotification({
         id: msg.terminalId,
@@ -147,8 +269,14 @@ function handleMessage(msg) {
       break;
     case "open_external":
       if (msg.url && typeof msg.url === "string") {
+        let target = msg.url;
         try {
-          shell.openExternal(msg.url);
+          new URL(target);
+        } catch {
+          target = `https://${target}`;
+        }
+        try {
+          shell.openExternal(target).catch((err) => console.error("Erro ao abrir URL externa:", err));
         } catch (err) {
           console.error("Erro ao abrir URL externa:", err);
         }

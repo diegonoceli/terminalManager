@@ -66,7 +66,23 @@ function send(msg) {
 function handleMessage(msg) {
   switch (msg.type) {
     case "layout":
-      syncWorkflowsUI(msg.workflows, msg.activeWorkflowId);
+      app.workspaces = msg.workspaces || [];
+      app.ui = msg.ui || {};
+      app.settings = msg.settings || {};
+      app.roles = msg.roles || [];
+      const activeWs = msg.activeWorkspaceId || msg.activeWorkflowId;
+      app.activeWorkspaceId = activeWs;
+      // UI de workspaces (sidebar) usa v3; seletor de floors legado usa v2
+      if (window.WorkspaceSidebar && Array.isArray(app.workspaces)) {
+        try {
+          WorkspaceSidebar.render(app.workspaces, activeWs);
+        } catch (err) {
+          console.error("sidebar render:", err);
+        }
+      }
+      const wfList =
+        msg.workflows || app.workspaces.map((w) => ({ id: w.id, name: w.name, nodeCount: w.nodeCount || 0 }));
+      syncWorkflowsUI(wfList, activeWs);
       syncLayout(msg.nodes || msg.terminals || []);
       if (app.connections) {
         app.connections.setConnections(msg.connections || []);
@@ -131,6 +147,69 @@ function handleMessage(msg) {
       }
       break;
     }
+    case "dir_picked":
+      if (window.WorkspaceSidebar) {
+        window.WorkspaceSidebar.onDirPicked(msg.path);
+      }
+      break;
+    case "workspace_state":
+      if (msg.state === "paused" && typeof toast === "function") {
+        toast(msg.note || `Workspace "${msg.name || msg.workspaceId}" pausado.`);
+      }
+      break;
+    case "agent_list":
+      app.agents = msg.agents || [];
+      break;
+    case "attention": {
+      const w = app.widgets.get(msg.nodeId);
+      if (w && w.el) w.el.classList.add("agent-attention");
+      break;
+    }
+    case "attention_cleared": {
+      const w = app.widgets.get(msg.nodeId);
+      if (w && w.el) w.el.classList.remove("agent-attention");
+      break;
+    }
+    case "note_read_result": {
+      const w = app.widgets.get(msg.nodeId);
+      if (w && typeof w.loadContent === "function") w.loadContent(msg.content);
+      break;
+    }
+    case "note_moved": {
+      const w = app.widgets.get(msg.nodeId);
+      if (w && typeof w.setProject === "function") w.setProject(msg.filePath);
+      if (!msg.ok) toast("Não foi possível mover a nota (diretório do workspace não definido).");
+      break;
+    }
+    case "fs_dir_result": {
+      const w = app.widgets.get(msg.nodeId);
+      if (w && typeof w.onDirResult === "function") {
+        if (msg.ok) w.onDirResult(msg.path, msg.entries);
+        else toast(msg.error || "Falha ao listar diretório.");
+      }
+      break;
+    }
+    case "fs_crud_result":
+      if (!msg.ok) toast(msg.error || "Operação de arquivo falhou.");
+      break;
+    case "git_result": {
+      const w = app.widgets.get(msg.nodeId);
+      if (w && typeof w.onGitResult === "function") {
+        w.onGitResult(msg.action, msg.ok, msg.data);
+        if (!msg.ok) toast(msg.error || msg.data?.err || "Operação Git falhou.");
+      }
+      break;
+    }
+    case "diff_result": {
+      const w = app.widgets.get(msg.nodeId);
+      if (w && typeof w.onDiff === "function") w.onDiff(msg.text);
+      break;
+    }
+    case "graph_result": {
+      const w = app.widgets.get(msg.nodeId);
+      if (w && typeof w.onGraph === "function") w.onGraph(msg.text);
+      break;
+    }
     default:
       break;
   }
@@ -174,6 +253,10 @@ function ensureNode(data, doFit) {
       w = new DevicePortalWidget({ ...data, app });
     } else if (data.type === "code-editor") {
       w = new EditorWidget({ ...data, app });
+    } else if (data.type === "note") {
+      w = new NoteWidget({ ...data, app });
+    } else if (data.type === "file-tree") {
+      w = new FileTreeWidget({ ...data, app });
     } else {
       w = new TermWidget({ ...data, app });
     }
@@ -268,6 +351,7 @@ app.sendRemoveConnection = (id) => send({ type: "remove_connection", id });
 app.openExternal = (url) => send({ type: "open_external", url });
 app.sendUpdateNode = (id, config) => send({ type: "update_node", id, config });
 app.sendOpenVSCode = (path) => send({ type: "open_vscode", path });
+app.send = send;
 
 // Prevent Electron from opening dropped files in the window
 window.addEventListener("dragover", (e) => e.preventDefault(), false);
@@ -354,6 +438,44 @@ function createEditor() {
   });
 }
 
+function createNote() {
+  const size = app.canvas.viewportSize;
+  const center = app.canvas.screenToWorld(size.w / 2, size.h / 2);
+  const stagger = (app.newCount % 4) * 24;
+  app.newCount++;
+  send({
+    type: "create_node",
+    node: {
+      type: "note",
+      title: "Nota",
+      x: Math.round(center.x - 180 + stagger),
+      y: Math.round(center.y - 150 + stagger),
+      width: 360,
+      height: 300,
+    },
+  });
+}
+
+function createFileTree() {
+  const size = app.canvas.viewportSize;
+  const center = app.canvas.screenToWorld(size.w / 2, size.h / 2);
+  const stagger = (app.newCount % 4) * 24;
+  app.newCount++;
+  const active = (app.workspaces || []).find((w) => w.id === app.activeWorkspaceId);
+  send({
+    type: "create_node",
+    node: {
+      type: "file-tree",
+      title: "Arquivos",
+      rootPath: (active && active.workingDir) || "",
+      x: Math.round(center.x - 180 + stagger),
+      y: Math.round(center.y - 240 + stagger),
+      width: 380,
+      height: 500,
+    },
+  });
+}
+
 /* ---------------- zoom & pan ---------------- */
 function zoomIn() {
   const s = app.canvas.viewportSize;
@@ -400,47 +522,58 @@ function fitMaybe() {
 }
 
 /* ---------------- toolbar / botões ---------------- */
-document.getElementById("btn-new")?.addEventListener("click", createTerminal);
+document.getElementById("btn-new")?.addEventListener("click", () => {
+  if (window.Settings && window.Settings.openNewTerminal) {
+    Settings.openNewTerminal();
+  } else {
+    createTerminal();
+  }
+});
 document.getElementById("btn-new-web")?.addEventListener("click", createWebPortal);
 document.getElementById("btn-new-device")?.addEventListener("click", () => {
   const isApple = confirm("Criar iPhone 17 Pro Max (OK) ou Pixel 9 (Cancelar)?");
   createDevicePortal(isApple ? "iphone17" : "pixel9");
 });
 document.getElementById("btn-new-editor")?.addEventListener("click", createEditor);
+document.getElementById("btn-new-note")?.addEventListener("click", createNote);
+document.getElementById("btn-new-files")?.addEventListener("click", createFileTree);
+document.getElementById("btn-agents")?.addEventListener("click", () => {
+  if (window.Settings) Settings.openRolesManager();
+});
 
-// Workflows / Floors listeners
+// Workflows / Workspaces listeners (legado até remoção do seletor de floors)
 if (floorSelect) {
   floorSelect.addEventListener("change", () => {
-    send({ type: "workflow_switch", workflowId: floorSelect.value });
+    send({ type: "workspace_switch", workspaceId: floorSelect.value });
   });
 }
 
 document.getElementById("btn-floor-new")?.addEventListener("click", () => {
-  const currentCount = (floorSelect?.options?.length || 0) + 1;
-  const name = prompt("Nome do novo Floor (Workspace):", `Floor ${currentCount}`);
+  const currentCount = (app.workspaces?.length || 1) + 1;
+  const name = prompt("Nome do novo Workspace:", `Workspace ${currentCount}`);
   if (name && name.trim()) {
-    send({ type: "workflow_create", name: name.trim() });
+    send({ type: "workspace_create", name: name.trim() });
   }
 });
 
 document.getElementById("btn-floor-rename")?.addEventListener("click", () => {
   if (!floorSelect) return;
-  const currentName = floorSelect.options[floorSelect.selectedIndex]?.text || "Floor";
-  const name = prompt("Novo nome para o Floor atual:", currentName);
+  const currentName = floorSelect.options[floorSelect.selectedIndex]?.text || "Workspace";
+  const name = prompt("Novo nome para o Workspace atual:", currentName);
   if (name && name.trim()) {
-    send({ type: "workflow_rename", workflowId: floorSelect.value, name: name.trim() });
+    send({ type: "workspace_rename", workspaceId: floorSelect.value, name: name.trim() });
   }
 });
 
 document.getElementById("btn-floor-del")?.addEventListener("click", () => {
   if (!floorSelect) return;
   if (floorSelect.options.length <= 1) {
-    alert("Não é possível excluir o único Floor existente.");
+    alert("Não é possível excluir o único Workspace existente.");
     return;
   }
-  const currentName = floorSelect.options[floorSelect.selectedIndex]?.text || "Floor";
-  if (confirm(`Excluir o Floor "${currentName}" e todos os seus nós?`)) {
-    send({ type: "workflow_delete", workflowId: floorSelect.value });
+  const currentName = floorSelect.options[floorSelect.selectedIndex]?.text || "Workspace";
+  if (confirm(`Excluir o Workspace "${currentName}" e todos os seus nós?`)) {
+    send({ type: "workspace_delete", workspaceId: floorSelect.value });
   }
 });
 
@@ -465,6 +598,28 @@ if (canvasBg) {
 
 window.addEventListener("keydown", (e) => {
   const mod = e.metaKey || e.ctrlKey;
+  if (e.repeat && e.key === "Control") return;
+  // Ctrl duplo → números dos workspaces (saltar)
+  if ((e.key === "Control" || e.key === "Meta") && !isTyping(e)) {
+    const now = Date.now();
+    if (now - (app._lastCtrlAt || 0) < 420) {
+      if (window.WorkspaceSidebar) {
+        WorkspaceSidebar.setNumbers(!WorkspaceSidebar.numberMode);
+      }
+      app._lastCtrlAt = 0;
+    } else {
+      app._lastCtrlAt = now;
+    }
+    return;
+  }
+  if (mod && e.key === "ArrowUp") { e.preventDefault(); WorkspaceSidebar?.navPrev(); return; }
+  if (mod && e.key === "ArrowDown") { e.preventDefault(); WorkspaceSidebar?.navNext(); return; }
+  if (WorkspaceSidebar?.numberMode && /^[1-9]$/.test(e.key) && !isTyping(e)) {
+    e.preventDefault();
+    WorkspaceSidebar.jumpTo(Number(e.key));
+    WorkspaceSidebar.setNumbers(false);
+    return;
+  }
   if (mod && e.key === "+") { e.preventDefault(); zoomIn(); }
   else if (mod && e.key === "-") { e.preventDefault(); zoomOut(); }
   else if (mod && e.key === "0") { e.preventDefault(); zoomReset(); }
@@ -543,5 +698,15 @@ function toast(text) {
 }
 window.toast = toast;
 
+if (window.WorkspaceSidebar) {
+  WorkspaceSidebar.init(app, send);
+}
+if (window.Settings) {
+  Settings.init(app, send);
+}
+
 connect();
+if (useBridge) {
+  send({ type: "agent_list_request" });
+}
 window.__terminalManager = { app, send, createTerminal, createWebPortal, createDevicePortal, createEditor, fitAll, zoomFit, centerOrigin };

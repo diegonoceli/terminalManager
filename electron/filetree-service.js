@@ -1,0 +1,146 @@
+// electron/filetree-service.js
+// Serviço de arquivos + Git para o nó Árvore de Arquivos (US5/US9).
+// fs nativo + CLI git via child_process (sem dependência JS de git).
+
+import {
+  readdirSync,
+  statSync,
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  rmSync,
+} from "node:fs";
+import { join, basename, dirname } from "node:path";
+import { execFile } from "node:child_process";
+
+function run(args, cwd) {
+  return new Promise((resolve) => {
+    execFile("git", args, { cwd, maxBuffer: 32 * 1024 * 1024 }, (err, stdout, stderr) => {
+      resolve({ ok: !err, code: err ? err.code ?? 1 : 0, out: String(stdout || ""), err: String(stderr || (err && err.message) || "") });
+    });
+  });
+}
+
+export function isRepo(cwd) {
+  return existsSync(join(cwd, ".git")) || existsSync(cwd);
+}
+
+export function readDir(path) {
+  if (!path || !existsSync(path)) return { ok: false, entries: [], error: "Diretório inexistente ou inacessível" };
+  try {
+    const entries = readdirSync(path, { withFileTypes: true })
+      .map((d) => {
+        const full = join(path, d.name);
+        let size = 0;
+        try {
+          const st = statSync(full);
+          size = st.size;
+        } catch {}
+        return {
+          name: d.name,
+          path: full,
+          type: d.isDirectory() ? "dir" : "file",
+          size,
+        };
+      })
+      .sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === "dir" ? -1 : 1));
+    return { ok: true, entries, error: null };
+  } catch (e) {
+    return { ok: false, entries: [], error: e.message };
+  }
+}
+
+export function fsCrud(action, { path, newName, toPath } = {}) {
+  try {
+    if (action === "create") {
+      const target = join(path, newName || "novo-arquivo");
+      if (!existsSync(target)) writeFileSync(target, "");
+      return { ok: true };
+    }
+    if (action === "mkdir") {
+      mkdirSync(join(path, newName || "nova-pasta"), { recursive: true });
+      return { ok: true };
+    }
+    if (action === "rename") {
+      renameSync(path, join(dirname(path), newName));
+      return { ok: true };
+    }
+    if (action === "move") {
+      mkdirSync(dirname(toPath), { recursive: true });
+      renameSync(path, toPath);
+      return { ok: true };
+    }
+    if (action === "delete") {
+      const st = statSync(path);
+      if (st.isDirectory()) rmSync(path, { recursive: true, force: true });
+      else unlinkSync(path);
+      return { ok: true };
+    }
+    return { ok: false, error: `Ação desconhecida: ${action}` };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+export async function gitOps(cwd, action, { branch, message, stash } = {}) {
+  if (!cwd || !existsSync(cwd)) return { ok: false, error: "Diretório inválido" };
+  switch (action) {
+    case "branch_show":
+      return run(["branch", "--show-current"], cwd);
+    case "status": {
+      const r = await run(["status", "--short", "--branch"], cwd);
+      return r;
+    }
+    case "commit": {
+      if (!message) return { ok: false, error: "Mensagem de commit obrigatória" };
+      await run(["add", "-A"], cwd);
+      const r = await run(["commit", "-m", message], cwd);
+      return r;
+    }
+    case "pull":
+      return run(["pull"], cwd);
+    case "push":
+      return run(["push"], cwd);
+    case "fetch":
+      return run(["fetch", "--all"], cwd);
+    case "checkout":
+      return branch ? run(["checkout", branch], cwd) : { ok: false, error: "Branch obrigatória" };
+    case "branch":
+      return branch ? run(["checkout", "-b", branch], cwd) : run(["branch"], cwd);
+    case "merge":
+      return branch ? run(["merge", branch], cwd) : { ok: false, error: "Branch obrigatória" };
+    case "stash":
+      return run(["stash"], cwd);
+    case "stash_pop":
+      return run(["stash", "pop"], cwd);
+    default:
+      return { ok: false, error: `Ação git desconhecida: ${action}` };
+  }
+}
+
+export async function gitDiff(cwd, file) {
+  const args = ["diff", "--no-color"];
+  if (file) args.push("--", file);
+  return run(args, cwd);
+}
+
+export async function gitGraph(cwd) {
+  return run(["log", "--graph", "--all", "--decorate", "--oneline", "-n", "300"], cwd);
+}
+
+export function readFileText(path) {
+  try {
+    return existsSync(path) ? readFileSync(path, "utf8") : "";
+  } catch {
+    return "";
+  }
+}
+
+export function writeFileText(path, content) {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, content ?? "", "utf8");
+  return { ok: true };
+}

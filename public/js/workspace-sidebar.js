@@ -1,0 +1,388 @@
+// public/js/workspace-sidebar.js
+// Barra lateral de workspaces: criar/editar (diretório+ícone), pastas, mini sidebar,
+// instruções CLAUDE.md/AGENTS.md e atalhos de navegação. US1.
+(function () {
+  const WorkspaceSidebar = {
+    app: null,
+    send: null,
+    workspaces: [],
+    activeId: null,
+    numberMode: false,
+
+    init(app, send) {
+      this.app = app;
+      this.send = send;
+      this.el = document.getElementById("sidebar");
+      this.root = document.getElementById("modal-root");
+      if (!this.el) return;
+      this.el.addEventListener("wheel", (e) => {
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          const delta = Math.sign(e.deltaY);
+          if (delta > 0) this.navNext();
+          else if (delta < 0) this.navPrev();
+        }
+      }, { passive: false });
+      this._ctx = document.createElement("div");
+      this._ctx.className = "ctx-menu hidden";
+      document.body.appendChild(this._ctx);
+    },
+
+    render(workspaces, activeId) {
+      this.workspaces = workspaces || [];
+      this.activeId = activeId || null;
+      if (!this.el) return;
+      this.el.innerHTML = "";
+      const ui = (this.app && this.app.ui) || {};
+      const collapsed = !!(ui.sidebar && ui.sidebar.collapsed);
+      document.body.classList.toggle("sb-mini", collapsed);
+      document.body.classList.add("sb-open");
+
+      this.el.appendChild(this._buildHeader(collapsed));
+      const list = document.createElement("div");
+      list.className = "sb-list";
+
+      const inFolder = new Set();
+      for (const f of ui.folders || []) {
+        for (const wid of f.workspaceIds || []) inFolder.add(wid);
+      }
+
+      // Workspaces agrupados por pasta
+      for (const f of ui.folders || []) {
+        const members = (f.workspaceIds || [])
+          .map((id) => this.workspaces.find((w) => w.id === id))
+          .filter(Boolean);
+        if (members.length === 0) continue;
+        list.appendChild(this._label(f.name || "Pasta", f));
+        for (const w of members) list.appendChild(this._row(w));
+      }
+
+      const rest = this.workspaces.filter((w) => !inFolder.has(w.id));
+      if (rest.length && (ui.folders || []).length > 0) {
+        list.appendChild(this._label("Outros"));
+      }
+      for (const w of rest) list.appendChild(this._row(w));
+
+      this.el.appendChild(list);
+
+      if (collapsed) {
+        this.el.classList.add("is-mini");
+      } else {
+        this.el.classList.remove("is-mini");
+      }
+    },
+
+    _buildHeader(collapsed) {
+      const header = document.createElement("div");
+      header.className = "sb-header";
+      const title = document.createElement("span");
+      title.className = "sb-title";
+      title.textContent = collapsed ? "" : "Workspaces";
+
+      const addBtn = this._btn(collapsed ? "＋" : "＋", "Novo workspace");
+      addBtn.addEventListener("click", () => this.openModal());
+      const minBtn = this._btn(collapsed ? "»" : "«", collapsed ? "Expandir" : "Mini barra");
+      minBtn.addEventListener("click", () => this.toggleCollapse());
+      const numBtn = this._btn("#", "Números (atalho: Ctrl 2x)");
+      numBtn.addEventListener("click", () => this.toggleNumbers());
+
+      header.appendChild(title);
+      header.appendChild(addBtn);
+      if (!collapsed) header.appendChild(numBtn);
+      header.appendChild(minBtn);
+      return header;
+    },
+
+    _label(text) {
+      const l = document.createElement("div");
+      l.className = "sb-group";
+      l.textContent = text;
+      return l;
+    },
+
+    _row(w) {
+      const row = document.createElement("div");
+      row.className = "sb-row" + (w.id === this.activeId ? " active" : "") + (w.dirMissing ? " missing" : "");
+      row.dataset.id = w.id;
+
+      const icon = document.createElement("span");
+      icon.className = "sb-icon";
+      icon.textContent = w.icon || "▦";
+
+      const name = document.createElement("span");
+      name.className = "sb-name";
+      name.textContent = w.name || "Workspace";
+      name.title = `${w.name || "Workspace"}\n${w.workingDir || "sem diretório"}`;
+
+      const num = document.createElement("span");
+      num.className = "sb-num hidden";
+
+      row.appendChild(icon);
+      row.appendChild(name);
+      row.appendChild(num);
+
+      row.addEventListener("click", () => this.switchTo(w.id));
+      row.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this._openCtx(e.clientX, e.clientY, w);
+      });
+      return row;
+    },
+
+    _btn(text, title) {
+      const b = document.createElement("button");
+      b.className = "sb-btn";
+      b.type = "button";
+      b.textContent = text;
+      b.title = title;
+      return b;
+    },
+
+    switchTo(id) {
+      if (id === this.activeId) return;
+      if (this.send) this.send({ type: "workspace_switch", workspaceId: id });
+    },
+
+    navNext() {
+      if (!this.workspaces.length) return;
+      const idx = this.workspaces.findIndex((w) => w.id === this.activeId);
+      const next = this.workspaces[(idx + 1 + this.workspaces.length) % this.workspaces.length];
+      this.switchTo(next.id);
+    },
+
+    navPrev() {
+      if (!this.workspaces.length) return;
+      const idx = this.workspaces.findIndex((w) => w.id === this.activeId);
+      const prev = this.workspaces[(idx - 1 + this.workspaces.length) % this.workspaces.length];
+      this.switchTo(prev.id);
+    },
+
+    jumpTo(n) {
+      const w = this.workspaces[n - 1];
+      if (w) this.switchTo(w.id);
+    },
+
+    toggleNumbers() {
+      this.numberMode = !this.numberMode;
+      this._applyNumbers();
+    },
+
+    setNumbers(on) {
+      this.numberMode = on;
+      this._applyNumbers();
+    },
+
+    _applyNumbers() {
+      const rows = this.el ? [...this.el.querySelectorAll(".sb-row")] : [];
+      const visible = this.numberMode && !document.body.classList.contains("sb-mini");
+      rows.forEach((row, i) => {
+        const num = row.querySelector(".sb-num");
+        if (num) {
+          num.textContent = String(i + 1);
+          num.classList.toggle("hidden", !visible || i > 8);
+        }
+      });
+    },
+
+    toggleCollapse() {
+      const collapsed = !(this.app.ui.sidebar && this.app.ui.sidebar.collapsed);
+      if (this.app) this.app.ui.sidebar = { collapsed };
+      if (this.send) this.send({ type: "sidebar_collapse", collapsed });
+      document.body.classList.toggle("sb-mini", collapsed);
+      this.render(this.workspaces, this.activeId);
+    },
+
+    onDirPicked(path) {
+      if (this._dirCallback) {
+        this._dirCallback(path);
+        this._dirCallback = null;
+      }
+    },
+
+    _openCtx(x, y, w) {
+      const m = this._ctx;
+      m.innerHTML = "";
+      const item = (label, fn, danger) => {
+        const d = document.createElement("div");
+        d.className = "ctx-item" + (danger ? " danger" : "");
+        d.textContent = label;
+        d.addEventListener("click", () => {
+          this._hideCtx();
+          fn();
+        });
+        m.appendChild(d);
+      };
+      item("Editar", () => this.openModal(w));
+      if (w.workingDir) item("Abrir no Editor", () => {
+        if (this.send) this.send({ type: "open_vscode", path: w.workingDir });
+      });
+      const canDelete = this.workspaces.length > 1;
+      item("Excluir", () => {
+        if (!canDelete) {
+          alert("Não é possível excluir o único workspace.");
+          return;
+        }
+        if (confirm(`Excluir o workspace "${w.name}" e todos os seus nós?`)) {
+          if (this.send) this.send({ type: "workspace_delete", workspaceId: w.id });
+        }
+      }, true);
+
+      m.classList.remove("hidden");
+      const mw = 190;
+      m.style.left = Math.min(x, window.innerWidth - mw - 8) + "px";
+      m.style.top = Math.min(y, window.innerHeight - m.offsetHeight - 8) + "px";
+
+      const close = (e) => {
+        if (!m.contains(e.target)) this._hideCtx();
+      };
+      setTimeout(() => document.addEventListener("pointerdown", close, { once: true }), 0);
+    },
+
+    _hideCtx() {
+      this._ctx.classList.add("hidden");
+    },
+
+    /* ---------------- Modal Novo/Editar Workspace ---------------- */
+    openModal(w) {
+      const root = this.root;
+      if (!root) return;
+      root.innerHTML = "";
+      root.classList.remove("hidden");
+
+      const editing = !!w;
+      const ws = editing ? w : { name: "", icon: "", workingDir: "", instructions: {} };
+
+      const overlay = el("div", "modal-overlay");
+      const box = el("div", "modal");
+      box.appendChild(el("h3", "", editing ? "Editar Workspace" : "Novo Workspace"));
+
+      const fName = field("Nome", "text", ws.name || "");
+      const fIcon = field("Ícone (emoji)", "text", ws.icon || "", 8);
+      const dirRow = el("div", "field");
+      const dLabel = el("label", "", "Diretório de trabalho");
+      const dWrap = el("div", "dir-row");
+      const fDir = el("input", "input");
+      fDir.type = "text";
+      fDir.value = ws.workingDir || "";
+      fDir.placeholder = "ex.: ~/projetos/meu-app";
+      const dirBtn = el("button", "btn", "Procurar…");
+      dirBtn.type = "button";
+      dirBtn.addEventListener("click", () => {
+        this._dirCallback = (path) => {
+          if (path) fDir.value = path;
+        };
+        this.send({ type: "dir_pick" });
+      });
+      dWrap.appendChild(fDir);
+      dWrap.appendChild(dirBtn);
+      dirRow.appendChild(dLabel);
+      dirRow.appendChild(dWrap);
+
+      const inst = el("details", "field");
+      const sum = el("summary", "", "Instruções dos agentes (CLAUDE.md / AGENTS.md)");
+      const syncRow = el("label", "check-row");
+      const syncCb = el("input", "");
+      syncCb.type = "checkbox";
+      syncCb.checked = !!(ws.instructions && ws.instructions.syncBetween);
+      syncRow.appendChild(syncCb);
+      syncRow.appendChild(document.createTextNode("Sincronizar automaticamente CLAUDE.md ⇄ AGENTS.md"));
+      const taClaude = ta("CLAUDE.md", (ws.instructions && ws.instructions.claudeMd) || "");
+      const taAgents = ta("AGENTS.md", (ws.instructions && ws.instructions.agentsMd) || "");
+      inst.appendChild(sum);
+      inst.appendChild(syncRow);
+      inst.appendChild(taClaude.wrap);
+      inst.appendChild(taAgents.wrap);
+
+      box.appendChild(fName.wrap);
+      box.appendChild(fIcon.wrap);
+      box.appendChild(dirRow);
+      box.appendChild(inst);
+
+      const actions = el("div", "modal-actions");
+      const cancel = el("button", "btn", "Cancelar");
+      cancel.type = "button";
+      cancel.addEventListener("click", () => this.closeModal());
+      const save = el("button", "btn primary", editing ? "Salvar" : "Criar");
+      save.type = "button";
+
+      save.addEventListener("click", () => {
+        const name = fName.input.value.trim();
+        const icon = fIcon.input.value.trim();
+        const dir = fDir.value.trim();
+        if (!name && !editing) {
+          alert("Informe um nome para o workspace.");
+          return;
+        }
+        if (editing) {
+          if (name && name !== ws.name) this.send({ type: "workspace_rename", workspaceId: ws.id, name });
+          if (icon !== (ws.icon || "")) this.send({ type: "workspace_rename", workspaceId: ws.id, icon });
+          if (dir !== (ws.workingDir || "")) this.send({ type: "workspace_set_dir", workspaceId: ws.id, workingDir: dir });
+          this.send({
+            type: "workspace_instructions",
+            workspaceId: ws.id,
+            content: { claudeMd: taClaude.area.value, agentsMd: taAgents.area.value },
+            syncBetween: syncCb.checked,
+          });
+        } else {
+          this.send({
+            type: "workspace_create",
+            name: name || "Workspace",
+            workingDir: dir,
+            icon: icon || "",
+          });
+        }
+        this.closeModal();
+      });
+
+      actions.appendChild(cancel);
+      actions.appendChild(save);
+      box.appendChild(actions);
+      overlay.appendChild(box);
+      root.appendChild(overlay);
+
+      fName.input.focus();
+
+      function el(tag, cls, text) {
+        const n = document.createElement(tag);
+        if (cls) n.className = cls;
+        if (text) n.textContent = text;
+        return n;
+      }
+      function field(label, type, value, max) {
+        const wrap = document.createElement("div");
+        wrap.className = "field";
+        const lab = document.createElement("label");
+        lab.textContent = label;
+        const input = document.createElement("input");
+        input.type = type;
+        input.value = value;
+        if (max) input.maxLength = max;
+        wrap.appendChild(lab);
+        wrap.appendChild(input);
+        return { wrap, input };
+      }
+      function ta(labelText, value) {
+        const wrap = document.createElement("div");
+        wrap.className = "field";
+        const lab = document.createElement("label");
+        lab.textContent = labelText;
+        const area = document.createElement("textarea");
+        area.value = value;
+        area.rows = 5;
+        wrap.appendChild(lab);
+        wrap.appendChild(area);
+        return { wrap, area };
+      }
+    },
+
+    closeModal() {
+      if (this.root) {
+        this.root.innerHTML = "";
+        this.root.classList.add("hidden");
+      }
+    },
+  };
+
+  window.WorkspaceSidebar = WorkspaceSidebar;
+})();
