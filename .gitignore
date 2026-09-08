@@ -8,3 +8,6 @@ state.json
 *.log
 npm-debug.log*
 .maestri/floors/
+
+# Test parity artifacts
+scratch/test_parity_*
