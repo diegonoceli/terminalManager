@@ -18,6 +18,9 @@ class FileTreeWidget extends BasePortalWidget {
     this.entries = [];
     this.expanded = new Set();
     this.branch = "";
+    this.editing = false;
+    this.currentFile = null;
+    this.cm = null;
     this._createDOM();
     if (this.root) {
       this.reload();
@@ -155,7 +158,7 @@ class FileTreeWidget extends BasePortalWidget {
       if (isDir) {
         row.addEventListener("click", () => this.send({ type: "fs_read_dir", path: e.path }));
       } else {
-        row.addEventListener("dblclick", () => this._sendPathToTerminal(e));
+        row.addEventListener("dblclick", () => this.openFile(e.path));
       }
       row.addEventListener("contextmenu", (ev) => {
         ev.preventDefault();
@@ -176,7 +179,7 @@ class FileTreeWidget extends BasePortalWidget {
       tile.title = e.name;
       tile.addEventListener("dblclick", () => {
         if (e.type === "dir") this.send({ type: "fs_read_dir", path: e.path });
-        else this._sendPathToTerminal(e);
+        else this.openFile(e.path);
       });
       if (e.type === "dir") {
         tile.innerHTML = `<span class="ft-tile-ic">📁</span><span class="ft-tile-name">${e.name}</span>`;
@@ -309,6 +312,81 @@ class FileTreeWidget extends BasePortalWidget {
     } else if (window.toast) {
       toast("Foque um terminal para inserir o caminho.");
     }
+  }
+
+  /* ---- Editor embutido (CodeMirror) — US9 ---- */
+  openFile(path) {
+    if (!path) return;
+    this.currentFile = path;
+    this.send({ type: "file_read", path });
+    this.body.innerHTML = '<div class="ft-empty">Abrindo arquivo…</div>';
+  }
+
+  guessMode(path) {
+    const ext = (path.split(".").pop() || "").toLowerCase();
+    const map = { js: "javascript", jsx: "javascript", mjs: "javascript", cjs: "javascript", json: "javascript",
+      ts: "javascript", tsx: "javascript", css: "css", scss: "css", html: "htmlmixed", htm: "htmlmixed", vue: "htmlmixed",
+      xml: "xml", svg: "xml", md: "markdown", markdown: "markdown", py: "python",
+      c: "clike", h: "clike", cpp: "clike", java: "clike", js: "clike", cs: "clike", sh: "shell", bash: "shell", zsh: "shell" };
+    return map[ext] || null;
+  }
+
+  onFileRead(path, content) {
+    if (path !== this.currentFile) return;
+    this.editing = true;
+    this.body.innerHTML = "";
+    const bar = elDiv("ft-editor-bar", "");
+    const title = document.createElement("span");
+    title.className = "ft-editor-file";
+    title.textContent = path.split("/").pop() || path;
+    const back = elDiv("btn-link", "← Voltar à lista");
+    bar.append(title, back);
+
+    const wrap = document.createElement("div");
+    wrap.className = "cm-wrap";
+    const ta = document.createElement("textarea");
+    ta.value = content || "";
+    wrap.appendChild(ta);
+    this.body.append(bar, wrap);
+
+    const scheduleSave = (fn) => {
+      clearTimeout(this._saveTimer);
+      this._saveTimer = setTimeout(fn, 600);
+    };
+    const save = () => {
+      if (!this.currentFile) return;
+      const value = this.cm ? this.cm.getValue() : ta.value;
+      this.send({ type: "file_write", path: this.currentFile, content: value });
+    };
+
+    if (window.CodeMirror) {
+      this.cm = CodeMirror.fromTextArea(ta, {
+        lineNumbers: true,
+        mode: this.guessMode(path) || undefined,
+        autoCloseBrackets: true,
+        matchBrackets: true,
+        tabSize: 2,
+        indentUnit: 2,
+        indentWithTabs: false,
+      });
+      this.cm.on("change", () => scheduleSave(save));
+    } else {
+      this.cm = null;
+      ta.style.width = "100%";
+      ta.style.height = "100%";
+      ta.addEventListener("input", () => scheduleSave(save));
+    }
+    back.addEventListener("click", () => this.closeEditor());
+  }
+
+  closeEditor() {
+    if (this.cm) {
+      this.cm.toTextArea();
+      this.cm = null;
+    }
+    this.editing = false;
+    this.currentFile = null;
+    this.reload();
   }
 
   dispose() {

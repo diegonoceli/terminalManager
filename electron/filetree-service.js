@@ -14,7 +14,7 @@ import {
   rmSync,
 } from "node:fs";
 import { join, basename, dirname } from "node:path";
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 
 function run(args, cwd) {
   return new Promise((resolve) => {
@@ -143,4 +143,78 @@ export function writeFileText(path, content) {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, content ?? "", "utf8");
   return { ok: true };
+}
+
+const TEXT_EXT = /\.(txt|md|json|ya?ml|toml|js|jsx|ts|tsx|css|scss|html|htm|xml|svg|c|h|cpp|hpp|java|kt|py|rb|go|rs|php|sh|bash|zsh|sql|env|ini|cfg|log|vue|svelte)$/i;
+const IGNORE_DIRS = /^(node_modules|\.git|dist|build|out|vendor|\.cache)$/;
+
+/** Busca por nome (fuzzy simples) ou conteúdo (>query) — FR-033/SC-010. */
+export async function fileSearch(cwd, query, byContent) {
+  const q = String(query || "").toLowerCase();
+  if (!q || !cwd || !existsSync(cwd)) return { ok: false, matches: [], error: !cwd ? "Sem diretório" : null };
+
+  // Conteúdo: tenta ripgrep (rápido), senão varredura limitada
+  if (byContent) {
+    try {
+      const r = execFileSync("rg", ["-l", "-i", "--max-filesize", "1M", "--", q, cwd], { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
+      const matches = String(r).split("\n").filter(Boolean).slice(0, 200).map((p) => ({ path: p }));
+      return { ok: true, matches };
+    } catch {
+      return { ok: true, matches: await contentFallback(cwd, q) };
+    }
+  }
+
+  // Nome: varredura recursiva (limitada)
+  const matches = [];
+  const walk = (dir, depth) => {
+    if (depth > 8 || matches.length > 10000) return;
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (matches.length >= 10000) return;
+      const full = join(dir, e.name);
+      const rel = full.slice(cwd.length).replace(/^[/\\]/, "");
+      if (e.isDirectory()) {
+        if (IGNORE_DIRS.test(e.name)) continue;
+        walk(full, depth + 1);
+      } else if (rel.toLowerCase().includes(q)) {
+        matches.push({ path: full });
+      }
+    }
+  };
+  walk(cwd, 0);
+  return { ok: true, matches: matches.slice(0, 300) };
+}
+
+async function contentFallback(cwd, q) {
+  const matches = [];
+  const walk = (dir, depth) => {
+    if (depth > 7 || matches.length >= 60) return;
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (matches.length >= 60) return;
+      const full = join(dir, e.name);
+      if (e.isDirectory()) {
+        if (!IGNORE_DIRS.test(e.name)) walk(full, depth + 1);
+      } else if (TEXT_EXT.test(e.name)) {
+        try {
+          const st = statSync(full);
+          if (st.size <= 1024 * 1024 && readFileSync(full, "utf8").toLowerCase().includes(q)) {
+            matches.push({ path: full });
+          }
+        } catch {}
+      }
+    }
+  };
+  walk(cwd, 0);
+  return matches;
 }

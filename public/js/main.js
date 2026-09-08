@@ -16,6 +16,11 @@ const app = {
   prefs: { focusOnClick: localStorage.getItem("focus-on-click") !== "0" },
 };
 
+app.selectedIds = new Set();
+app.groups = new Map();
+app.nodeData = new Map();
+app.activeWorkspaceId = null;
+
 app.nodes = app.widgets; // Alias for universal nodes
 app.connections = new ConnectionsManager(app);
 
@@ -215,6 +220,16 @@ function handleMessage(msg) {
       if (w && typeof w.onGraph === "function") w.onGraph(msg.text);
       break;
     }
+    case "file_read_result": {
+      const w = app.widgets.get(msg.nodeId);
+      if (w && typeof w.onFileRead === "function") w.onFileRead(msg.path, msg.content);
+      break;
+    }
+    case "file_search_result":
+      if (typeof app._onSearchResults === "function") {
+        app._onSearchResults(msg.query, msg.matches || []);
+      }
+      break;
     default:
       break;
   }
@@ -279,6 +294,7 @@ function ensureNode(data, doFit) {
     if (data.title) w.updateTitle(data.title);
   }
   if (doFit && typeof w.fit === "function") w.fit();
+  app.nodeData.set(data.id, { ...data });
   return w;
 }
 
@@ -507,6 +523,94 @@ function createDrawing() {
   });
 }
 
+/* ---------------- Busca de arquivos (Ctrl+P / >conteúdo) — US9 ---------------- */
+let searchTimer = null;
+function openSearch() {
+  const root = document.getElementById("modal-root");
+  if (!root) return;
+  root.innerHTML = "";
+  root.classList.remove("hidden");
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  const box = document.createElement("div");
+  box.className = "modal search-modal";
+  box.appendChild(Object.assign(document.createElement("h3"), { textContent: "Buscar arquivos (prefixo > = conteúdo)" }));
+  const input = document.createElement("input");
+  input.className = "input";
+  input.placeholder = "nome do arquivo…  ou  > termo no conteúdo";
+  const list = document.createElement("div");
+  list.className = "search-results";
+  box.append(input, list);
+  overlay.appendChild(box);
+  root.appendChild(overlay);
+  input.focus();
+
+  const active = (app.workspaces || []).find((w) => w.id === app.activeWorkspaceId);
+  const cwd = (active && active.workingDir) || "";
+
+  app._onSearchResults = (query, matches) => {
+    if (query.trim() !== input.value.trim().replace(/^>\s*/, "").trim() && !(input.value.startsWith(">") && query === input.value.slice(1).trim())) return;
+    list.innerHTML = "";
+    if (!matches.length) {
+      list.appendChild(Object.assign(document.createElement("div"), { className: "ft-empty", textContent: "Nenhum resultado." }));
+      return;
+    }
+    for (const m of matches.slice(0, 60)) {
+      const row = document.createElement("div");
+      row.className = "search-row";
+      row.textContent = m.path || m;
+      row.title = m.path || m;
+      row.addEventListener("click", () => {
+        closeSearch();
+        openInFileTree(m.path);
+      });
+      list.appendChild(row);
+    }
+  };
+
+  const run = () => {
+    const val = input.value.trim();
+    if (!val) {
+      list.innerHTML = "";
+      return;
+    }
+    const byContent = val.startsWith(">");
+    const query = byContent ? val.slice(1).trim() : val;
+    if (!query) return;
+    send({ type: "file_search", cwd, query, byContent });
+  };
+  input.addEventListener("input", () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(run, 280);
+  });
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") run();
+    if (e.key === "Escape") closeSearch();
+  });
+  input.addEventListener("blur", () => setTimeout(closeSearch, 250));
+}
+
+function closeSearch() {
+  app._onSearchResults = null;
+  const root = document.getElementById("modal-root");
+  if (root) {
+    root.innerHTML = "";
+    root.classList.add("hidden");
+  }
+}
+
+function openInFileTree(path) {
+  let target = null;
+  for (const w of app.widgets.values()) {
+    if (w.type === "file-tree" && typeof w.openFile === "function") {
+      target = w;
+      break;
+    }
+  }
+  if (target) target.openFile(path);
+  else toast('Adicione um nó "Arquivos" para abrir o arquivo.');
+}
+
 /* ---------------- zoom & pan ---------------- */
 function zoomIn() {
   const s = app.canvas.viewportSize;
@@ -550,6 +654,274 @@ let fitTimer = null;
 function fitMaybe() {
   clearTimeout(fitTimer);
   fitTimer = setTimeout(fitAll, 120);
+}
+
+/* ---------------- Seleção múltipla & grupos (US8) ---------------- */
+function widgetOf(target) {
+  for (const [id, w] of app.widgets) {
+    if (w.el && w.el.contains(target)) return { id, w };
+  }
+  return null;
+}
+
+function toggleSelect(id) {
+  if (app.selectedIds.has(id)) app.selectedIds.delete(id);
+  else app.selectedIds.add(id);
+  applySelectionUI();
+}
+
+function clearSelection() {
+  app.selectedIds.clear();
+  applySelectionUI();
+}
+
+function applySelectionUI() {
+  for (const [id, w] of app.widgets) {
+    const on = app.selectedIds.has(id);
+    if (w.el) w.el.classList.toggle("sel", on);
+  }
+  // Cria/remove frames conforme grupos
+  renderGroupFrames();
+}
+
+window.addEventListener(
+  "pointerdown",
+  (e) => {
+    if (!e.shiftKey) {
+      if (!widgetOf(e.target)) clearSelection();
+      return;
+    }
+    const hit = widgetOf(e.target);
+    if (hit) {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleSelect(hit.id);
+    }
+  },
+  true
+);
+
+function boundsOf(ids) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const id of ids) {
+    const w = app.widgets.get(id);
+    if (!w) continue;
+    minX = Math.min(minX, w.worldPos.x);
+    minY = Math.min(minY, w.worldPos.y);
+    maxX = Math.max(maxX, w.worldPos.x + w.worldSize.w);
+    maxY = Math.max(maxY, w.worldPos.y + w.worldSize.h);
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+let groupCounter = 1;
+function groupSelection() {
+  const ids = [...app.selectedIds];
+  if (ids.length < 2) return;
+  const group = { id: `grp_${Date.now().toString(36)}`, name: `Grupo ${groupCounter++}`, nodeIds: ids };
+  app.groups.set(group.id, group);
+  toast(`Grupo "${group.name}" criado (${ids.length} nós).`);
+  renderGroupFrames();
+}
+
+function dissolveSelected() {
+  let changed = false;
+  for (const [gid, group] of app.groups) {
+    if (group.nodeIds.some((id) => app.selectedIds.has(id))) {
+      app.groups.delete(gid);
+      changed = true;
+    }
+  }
+  if (changed) {
+    toast("Grupo(s) dissolvido(s).");
+    renderGroupFrames();
+  }
+}
+
+function renderGroupFrames() {
+  const holder = document.getElementById("group-layer") || (() => {
+    const d = document.createElement("div");
+    d.id = "group-layer";
+    world.appendChild(d);
+    return d;
+  })();
+  holder.innerHTML = "";
+  for (const group of app.groups.values()) {
+    const b = boundsOf(group.nodeIds);
+    const frame = document.createElement("div");
+    frame.className = "group-frame";
+    frame.dataset.gid = group.id;
+    frame.style.left = `${b.minX - 8}px`;
+    frame.style.top = `${b.minY - 30}px`;
+    frame.style.width = `${Math.max(40, b.maxX - b.minX + 16)}px`;
+    frame.style.height = `${Math.max(40, b.maxY - b.minY + 38)}px`;
+
+    const header = document.createElement("div");
+    header.className = "group-frame-title";
+    header.textContent = group.name;
+    frame.appendChild(header);
+
+    // Arrastar grupo move membros
+    let dragging = null;
+    header.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      e.stopPropagation();
+      const start = { x: e.clientX, y: e.clientY };
+      const startPos = new Map();
+      for (const id of group.nodeIds) {
+        const w = app.widgets.get(id);
+        if (w) startPos.set(id, { x: w.worldPos.x, y: w.worldPos.y });
+      }
+      dragging = { start, startPos, gid: group.id, moved: false };
+      header.setPointerCapture(e.pointerId);
+    });
+    header.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      dragging.moved = true;
+      const zoom = app.canvas.zoom;
+      const dx = (e.clientX - dragging.start.x) / zoom;
+      const dy = (e.clientY - dragging.start.y) / zoom;
+      for (const [id, w] of app.widgets) {
+        if (!dragging.startPos.has(id)) continue;
+        const p = dragging.startPos.get(id);
+        w.setPosition(Math.round(p.x + dx), Math.round(p.y + dy));
+        app.sendMove(id, w.worldPos.x, w.worldPos.y);
+      }
+    });
+    const stopDrag = (e) => {
+      if (!dragging) return;
+      dragging = null;
+      try {
+        header.releasePointerCapture(e.pointerId);
+      } catch {}
+      renderGroupFrames();
+    };
+    header.addEventListener("pointerup", stopDrag);
+    header.addEventListener("pointercancel", stopDrag);
+
+    holder.appendChild(frame);
+  }
+}
+
+function alignSelected(axis) {
+  const ids = [...app.selectedIds].filter((id) => app.widgets.has(id));
+  if (ids.length < 2) return;
+  const ref = app.widgets.get(ids[0]);
+  for (const id of ids.slice(1)) {
+    const w = app.widgets.get(id);
+    if (axis === "x") w.setPosition(ref.worldPos.x, w.worldPos.y);
+    else w.setPosition(w.worldPos.x, ref.worldPos.y);
+    app.sendMove(id, w.worldPos.x, w.worldPos.y);
+  }
+}
+
+function distributeSelected(axis) {
+  const ids = [...app.selectedIds].filter((id) => app.widgets.has(id));
+  if (ids.length < 3) return;
+  const sorted = ids.map((id) => app.widgets.get(id)).sort((a, b) => (axis === "x" ? a.worldPos.x - b.worldPos.x : a.worldPos.y - b.worldPos.y));
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  const span = axis === "x" ? last.worldPos.x - first.worldPos.x : last.worldPos.y - first.worldPos.y;
+  const step = span / (sorted.length - 1);
+  sorted.forEach((w, i) => {
+    if (axis === "x") w.setPosition(first.worldPos.x + step * i, w.worldPos.y);
+    else w.setPosition(w.worldPos.x, first.worldPos.y + step * i);
+    app.sendMove(w.id, w.worldPos.x, w.worldPos.y);
+  });
+}
+
+function arrangeGrid() {
+  const ids = [...app.selectedIds].filter((id) => app.widgets.has(id));
+  if (ids.length === 0) return;
+  const cols = Math.ceil(Math.sqrt(ids.length));
+  let i = 0;
+  for (const w of app.widgets.values()) {
+    if (!app.selectedIds.has(w.id)) continue;
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    w.setPosition(20 + col * (w.worldSize.w + 16), 20 + row * (w.worldSize.h + 16));
+    app.sendMove(w.id, w.worldPos.x, w.worldPos.y);
+    i++;
+  }
+}
+
+function zoomToSelection() {
+  const ids = app.selectedIds.size ? [...app.selectedIds] : [...app.widgets.keys()];
+  const b = boundsOf(ids);
+  if (!isFinite(b.minX)) return;
+  app.canvas.fitAll({ x: b.minX, y: b.minY, width: b.maxX - b.minX, height: b.maxY - b.minY });
+}
+
+function duplicateWidget(id) {
+  const data = app.nodeData.get(id);
+  if (!data) return;
+  const cfg = { ...data, x: (data.x ?? 80) + 28, y: (data.y ?? 80) + 28, title: (data.title || "Nó") + " (cópia)" };
+  delete cfg.id;
+  send({ type: "create_node", node: cfg });
+}
+
+// Alt+clique no cabeçalho duplica o nó
+window.addEventListener(
+  "click",
+  (e) => {
+    if (!e.altKey) return;
+    const header = e.target.closest(".portal-header, .note-header, .term-header");
+    if (!header) return;
+    const hit = widgetOf(header);
+    if (hit) {
+      e.preventDefault();
+      e.stopPropagation();
+      duplicateWidget(hit.id);
+    }
+  },
+  true
+);
+
+/* ---------------- Minimapa (US8) ---------------- */
+let minimapTimer = null;
+function toggleMinimap() {
+  const mm = document.getElementById("minimap");
+  if (!mm) return;
+  const show = mm.classList.toggle("hidden");
+  if (show) {
+    stopMinimap();
+  } else {
+    drawMinimap();
+    minimapTimer = setInterval(drawMinimap, 600);
+  }
+}
+
+function stopMinimap() {
+  if (minimapTimer) {
+    clearInterval(minimapTimer);
+    minimapTimer = null;
+  }
+}
+
+function drawMinimap() {
+  const mm = document.getElementById("minimap");
+  if (!mm || mm.classList.contains("hidden")) return;
+  const W = mm.clientWidth, H = mm.clientHeight;
+  let html = "";
+  const b = boundsOf([...app.widgets.keys()]);
+  if (!isFinite(b.minX) || b.minX === b.maxX) {
+    mm.innerHTML = "";
+    return;
+  }
+  const pad = 20;
+  const sx = (W - pad * 2) / (b.maxX - b.minX);
+  const sy = (H - pad * 2) / (b.maxY - b.minY);
+  const s = Math.min(sx, sy);
+  const ox = pad + (W - pad * 2 - (b.maxX - b.minX) * s) / 2 - b.minX * s;
+  const oy = pad + (H - pad * 2 - (b.maxY - b.minY) * s) / 2 - b.minY * s;
+  const boxes = [];
+  for (const w of app.widgets.values()) {
+    const x = w.worldPos.x * s + ox;
+    const y = w.worldPos.y * s + oy;
+    boxes.push(`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${Math.max(2, w.worldSize.w * s).toFixed(1)}" height="${Math.max(2, w.worldSize.h * s).toFixed(1)}" rx="2"/>`);
+  }
+  html = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${boxes.join("")}</svg>`;
+  if (mm.innerHTML !== html) mm.innerHTML = html;
 }
 
 /* ---------------- toolbar / botões ---------------- */
@@ -632,6 +1004,15 @@ if (canvasBg) {
 window.addEventListener("keydown", (e) => {
   const mod = e.metaKey || e.ctrlKey;
   if (e.repeat && e.key === "Control") return;
+  if (!isTyping(e)) {
+    if (mod && !e.shiftKey && e.key.toLowerCase() === "p") { e.preventDefault(); openSearch(); return; }
+    if (mod && e.shiftKey && e.key.toLowerCase() === "g") { e.preventDefault(); dissolveSelected(); return; }
+    if (mod && !e.shiftKey && e.key.toLowerCase() === "g") { e.preventDefault(); groupSelection(); return; }
+    if (mod && e.shiftKey && e.key.toLowerCase() === "t") { e.preventDefault(); arrangeGrid(); return; }
+    if (mod && e.shiftKey && e.key.toLowerCase() === "m") { e.preventDefault(); toggleMinimap(); return; }
+    if (mod && e.key === "\\") { e.preventDefault(); const w = app.activeId ? app.widgets.get(app.activeId) : null; if (w && typeof w.focus === "function") w.focus(); return; }
+    if (mod && e.altKey && e.key === "\\") { e.preventDefault(); zoomToSelection(); return; }
+  }
   // Ctrl duplo → números dos workspaces (saltar)
   if ((e.key === "Control" || e.key === "Meta") && !isTyping(e)) {
     const now = Date.now();

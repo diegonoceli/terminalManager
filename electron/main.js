@@ -3,7 +3,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { TerminalManager } from "./terminal-manager.js";
 import { detectAgents } from "./agent-cli.js";
-import { readDir, fsCrud, gitOps, gitDiff, gitGraph } from "./filetree-service.js";
+import { readDir, fsCrud, gitOps, gitDiff, gitGraph, readFileText, writeFileText, fileSearch } from "./filetree-service.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -276,6 +276,27 @@ function handleMessage(msg) {
     case "git_graph": {
       gitGraph(msg.cwd).then((res) => {
         broadcast({ type: "graph_result", nodeId: msg.nodeId, ok: res.ok, text: res.ok ? res.out : res.err });
+      });
+      break;
+    }
+    case "file_read": {
+      const content = msg.path ? readFileText(msg.path) : "";
+      broadcast({ type: "file_read_result", nodeId: msg.nodeId, path: msg.path, content });
+      break;
+    }
+    case "file_write":
+      if (msg.path) writeFileText(msg.path, msg.content);
+      break;
+    case "file_search": {
+      fileSearch(msg.cwd, msg.query, !!msg.byContent).then((res) => {
+        broadcast({
+          type: "file_search_result",
+          query: msg.query,
+          byContent: !!msg.byContent,
+          ok: res.ok,
+          matches: res.matches || [],
+          error: res.error || null,
+        });
       });
       break;
     }

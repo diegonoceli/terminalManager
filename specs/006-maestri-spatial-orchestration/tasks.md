@@ -210,11 +210,11 @@
 - [ ] T070 [US8] Implementar inserção por arrasto de retângulo (ferramenta ativa → `mousedown` no canvas → retângulo de seleção → cria nó no tamanho desenhado) em `public/js/canvas.js` + `main.js` — FR-040
 - [X] T071 [P] [US8] Implementar `TextWidget` (rótulo/snippet contenteditable) e `DrawWidget` (canvas 2D com strokes `{color,width,points}`) em `public/js/widgets/textdraw.js`; registrar fábricas `text`/`drawing` em `main.js` e botões de ferramenta — FR-041
 - [X] T072 [US8] Persistir `strokes`/`content` do desenho/texto via `update_node` em `electron/main.js` e restaurar no load — FR-041
-- [ ] T073 [P] [US8] Implementar duplicar (`Alt+arrastar` ou menu direito) em `public/js/main.js` (clone do nó + geometria deslocada) — FR-042
-- [ ] T074 [US8] Implementar grupos em `canvas.js`/`main.js`: seleção múltipla + `Ctrl+G` cria `Group` (persistido em `AppState.workspaces[].groups`), frame nomeado, mover cabeçalho move membros, seleção passa pelo frame; `Ctrl+Shift+G` dissolve — FR-043
-- [ ] T075 [P] [US8] Implementar alinhar/distribuir e organizar em grade (`Ctrl+Shift+T`) em `public/js/main.js` sobre nós selecionados — FR-044/FR-045
+- [X] T073 [P] [US8] Implementar duplicar (`Alt+arrastar` ou menu direito) em `public/js/main.js` (clone do nó + geometria deslocada) — FR-042
+- [X] T074 [US8] Implementar grupos em `canvas.js`/`main.js`: seleção múltipla + `Ctrl+G` cria `Group` (persistido em `AppState.workspaces[].groups`), frame nomeado, mover cabeçalho move membros, seleção passa pelo frame; `Ctrl+Shift+G` dissolve — FR-043
+- [X] T075 [P] [US8] Implementar alinhar/distribuir e organizar em grade (`Ctrl+Shift+T`) em `public/js/main.js` sobre nós selecionados — FR-044/FR-045
 - [ ] T076 [US8] Implementar snap magnético em `public/js/canvas.js` (somente com `Ctrl` pressionado durante drag; tolerância ~6px; alinhar paredes/preencher lacunas) — FR-046
-- [ ] T077 [P] [US8] Implementar minimapa (`#minimap`, overlay SVG com nós+viewport; `Ctrl+Shift+M`; clique navega) em `public/js/canvas.js` — FR-047
+- [X] T077 [P] [US8] Implementar minimapa (`#minimap`, overlay SVG com nós+viewport; `Ctrl+Shift+M`; clique navega) em `public/js/canvas.js` — FR-047
 - [ ] T078 [US8] Implementar elevar/acoplar em `canvas.js`/`main.js`: duplo clique no cabeçalho eleva (centraliza animado); arrastar à borda acopla em coluna fixa em `#docks` (container não-transformado; `docked:"left"|"right"` persistido) — FR-048
 - [ ] T079 [US8] Registrar atalhos `Ctrl+\` (focar), `Ctrl+Alt+\` (zoom p/ seleção), `Ctrl+Alt+→/←` (navegar conexões) e `Ctrl+Shift+M` em `public/js/main.js`, evitando conflito quando digitando — FR-049
 
@@ -230,11 +230,11 @@
 
 ### Implementation for User Story 9
 
-- [ ] T080 [US9] Integrar editor CodeMirror 5 (vendored) no `FileTreeWidget` em `public/js/filetree.js`: abrir arquivo em painel de edição com modos por extensão, find/replace, multicursor, autoclose e detecção de indentação — FR-031
-- [ ] T081 [US9] Implementar leitura/escrita de arquivo (`file_read`/`file_write`) em `electron/filetree-service.js` + `main.js` e salvar com debounce; detectar mudança externa (edge case arquivo removido/alterado fora) — FR-031
-- [ ] T082 [P] [US9] Implementar busca fuzzy por nome em `public/js/main.js` (overlay `Ctrl+P`) consultando `file_search` por nome — FR-033
-- [ ] T083 [P] [US9] Implementar busca por conteúdo em `electron/filetree-service.js`: prefixo `>` → busca em conteúdo (`rg`/`grep -rl` com fallback a varredura de texto; limite de tamanho/profundidade p/ < 1 s) — FR-033/SC-010
-- [ ] T084 [US9] Renderizar resultados e abrir arquivo ao selecionar (nome ou conteúdo) em `public/js/main.js` + `filetree.js`
+- [X] T080 [US9] Integrar editor CodeMirror 5 (vendored) no `FileTreeWidget` em `public/js/filetree.js`: abrir arquivo em painel de edição com modos por extensão, find/replace, multicursor, autoclose e detecção de indentação — FR-031
+- [X] T081 [US9] Implementar leitura/escrita de arquivo (`file_read`/`file_write`) em `electron/filetree-service.js` + `main.js` e salvar com debounce; detectar mudança externa (edge case arquivo removido/alterado fora) — FR-031
+- [X] T082 [P] [US9] Implementar busca fuzzy por nome em `public/js/main.js` (overlay `Ctrl+P`) consultando `file_search` por nome — FR-033
+- [X] T083 [P] [US9] Implementar busca por conteúdo em `electron/filetree-service.js`: prefixo `>` → busca em conteúdo (`rg`/`grep -rl` com fallback a varredura de texto; limite de tamanho/profundidade p/ < 1 s) — FR-033/SC-010
+- [X] T084 [US9] Renderizar resultados e abrir arquivo ao selecionar (nome ou conteúdo) em `public/js/main.js` + `filetree.js`
 - [ ] T085 [US9] Implementar ícone de chat sobre seleção no editor/diff e envio do trecho ao agente conectado (via `agent-comm`/entrada do PTY) em `public/js/filetree.js` + `main.js` — FR-032
 - [ ] T086 [US9] Estender seleção→agente ao modo Diff (base/atual) — FR-032
 

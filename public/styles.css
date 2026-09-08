@@ -1267,3 +1267,56 @@ details.field summary { cursor: pointer; font-weight: 600; color: var(--muted); 
 .draw-widget .draw-canvas { width: 100%; height: 100%; display: block; }
 .draw-swatch { width: 16px !important; height: 16px !important; min-width: 16px; padding: 0; border-radius: 50%; }
 .draw-swatch.active { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* ---------- Seleção múltipla, grupos & minimapa (US8) ---------- */
+#world .spatial-node.sel { outline: 1.5px dashed var(--accent); outline-offset: 3px; }
+#group-layer { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
+.group-frame {
+  position: absolute;
+  border: 1.5px dashed rgba(79, 70, 229, 0.55);
+  border-radius: 12px;
+  background: rgba(79, 70, 229, 0.05);
+  pointer-events: none;
+}
+.group-frame-title {
+  position: absolute;
+  top: -22px; left: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  cursor: grab;
+  pointer-events: auto;
+  user-select: none;
+  white-space: nowrap;
+}
+.group-frame-title:active { cursor: grabbing; }
+
+.minimap {
+  position: fixed;
+  right: 14px; bottom: 14px;
+  width: 210px; height: 150px;
+  background: rgba(255,255,255,0.9);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  z-index: 90;
+  overflow: hidden;
+  padding: 4px;
+}
+.minimap svg { width: 100%; height: 100%; }
+.minimap rect { fill: rgba(79,70,229,0.35); stroke: #4f46e5; stroke-width: 0.6; }
+
+/* ---------- Editor embutido & busca (US9) ---------- */
+.ft-editor-bar { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-bottom: 1px solid var(--panel-border); background: #fafaf8; flex: none; }
+.ft-editor-file { flex: 1; font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btn-link { color: var(--accent); cursor: pointer; font-size: 12px; }
+.btn-link:hover { text-decoration: underline; }
+.cm-wrap { flex: 1; overflow: hidden; position: relative; min-height: 0; }
+.cm-wrap .CodeMirror { position: absolute; inset: 0; height: 100%; font-size: 12.5px; }
+.search-modal { width: 520px; }
+.search-results { max-height: 320px; overflow-y: auto; margin-top: 8px; }
+.search-row { padding: 6px 8px; font-size: 12.5px; border-radius: 6px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-row:hover { background: var(--titlebar); }
