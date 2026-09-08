@@ -977,7 +977,98 @@ export class TerminalManager {
     }
   }
 
-  /* ---------------- Helpers de compatibilidade (migração renderer US1) ---------------- */
+  /* ---------------- Portabilidade .maestri (FR-009 / US10) ---------------- */
+
+  /** Monta o bundle autocontido de um workspace (estado + notas + roles). */
+  exportWorkspace(workspaceId) {
+    const ws = this.workspaces.get(workspaceId);
+    if (!ws) return null;
+    const notes = {};
+    for (const n of ws.nodes || []) {
+      if (n.type !== "note") continue;
+      const file = n.filePath || (this.noteStore ? this.noteStore.internalFile(ws.id, n.id) : null);
+      notes[n.id] = this.noteStore ? this.noteStore.read(file) : "";
+    }
+    const usedRoles = new Set();
+    for (const n of ws.nodes || []) if (n.roleId) usedRoles.add(n.roleId);
+    const roles = (this.settings.roles || []).filter((r) => usedRoles.has(r.id));
+    return {
+      app: "maestri",
+      format: "maestri-bundle",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      workspace: {
+        name: ws.name,
+        icon: ws.icon,
+        groups: ws.groups || [],
+        instructions: ws.instructions || { source: "none", syncBetween: false },
+        nodes: (ws.nodes || []).map((n) => {
+          const copy = { ...n };
+          if (copy.type === "note") {
+            copy.filePath = ""; // caminhos absolutos não viajam
+            copy.internal = true;
+          }
+          if (copy.type === "terminal") {
+            // não transporta processos/sessões — só configuração
+            copy.cwd = undefined;
+          }
+          delete copy.workspaceId;
+          return copy;
+        }),
+        connections: (ws.connections || []).map((c) => ({ ...c, log: [] })),
+      },
+      notes,
+      roles,
+    };
+  }
+
+  /** Cria/atualiza um workspace a partir de um bundle `.maestri` importado. */
+  importWorkspace(bundle) {
+    if (!bundle || bundle.app !== "maestri" || bundle.format !== "maestri-bundle") return null;
+    const src = bundle.workspace || {};
+    const id = `ws_${randomUUID().slice(0, 8)}`;
+    const now = new Date().toISOString();
+    let name = src.name || "Workspace";
+    if (this.workspaces.has(id)) name = `${name} (importado)`;
+    const ws = {
+      id,
+      name,
+      icon: src.icon || "",
+      workingDir: "", // religado pelo usuário após import
+      instructions: src.instructions || { source: "none", syncBetween: false },
+      groups: Array.isArray(src.groups) ? src.groups : [],
+      nodes: [],
+      connections: Array.isArray(src.connections) ? src.connections.map((c) => ({ ...c, id: `conn_${randomUUID().slice(0, 8)}`, log: [] })) : [],
+      createdAt: now,
+      updatedAt: now,
+      lastActiveAt: 0,
+    };
+    for (const n of src.nodes || []) {
+      const copy = { ...n };
+      copy.workspaceId = id;
+      if (copy.type === "note" && this.noteStore) {
+        copy.internal = true;
+        copy.filePath = this.noteStore.create(id, copy.id, { title: copy.title });
+        const content = (bundle.notes && bundle.notes[copy.id]) || "";
+        this.noteStore.write(copy.filePath, content);
+      }
+      delete copy.workspaceId;
+      ws.nodes.push(copy);
+    }
+    // Roles referenciadas no bundle
+    if (Array.isArray(bundle.roles)) {
+      const existing = new Set((this.settings.roles || []).map((r) => r.id));
+      for (const role of bundle.roles) {
+        if (!existing.has(role.id)) {
+          this.settings.roles.push({ ...role });
+          existing.add(role.id);
+        }
+      }
+    }
+    this.workspaces.set(id, ws);
+    this.saveLayout();
+    return id;
+  }
 
   list() {
     const out = [];

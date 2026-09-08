@@ -213,7 +213,7 @@
 - [X] T073 [P] [US8] Implementar duplicar (`Alt+arrastar` ou menu direito) em `public/js/main.js` (clone do nó + geometria deslocada) — FR-042
 - [X] T074 [US8] Implementar grupos em `canvas.js`/`main.js`: seleção múltipla + `Ctrl+G` cria `Group` (persistido em `AppState.workspaces[].groups`), frame nomeado, mover cabeçalho move membros, seleção passa pelo frame; `Ctrl+Shift+G` dissolve — FR-043
 - [X] T075 [P] [US8] Implementar alinhar/distribuir e organizar em grade (`Ctrl+Shift+T`) em `public/js/main.js` sobre nós selecionados — FR-044/FR-045
-- [ ] T076 [US8] Implementar snap magnético em `public/js/canvas.js` (somente com `Ctrl` pressionado durante drag; tolerância ~6px; alinhar paredes/preencher lacunas) — FR-046
+- [X] T076 [US8] Implementar snap magnético em `public/js/canvas.js` (somente com `Ctrl` pressionado durante drag; tolerância ~6px; alinhar paredes/preencher lacunas) — FR-046
 - [X] T077 [P] [US8] Implementar minimapa (`#minimap`, overlay SVG com nós+viewport; `Ctrl+Shift+M`; clique navega) em `public/js/canvas.js` — FR-047
 - [ ] T078 [US8] Implementar elevar/acoplar em `canvas.js`/`main.js`: duplo clique no cabeçalho eleva (centraliza animado); arrastar à borda acopla em coluna fixa em `#docks` (container não-transformado; `docked:"left"|"right"` persistido) — FR-048
 - [ ] T079 [US8] Registrar atalhos `Ctrl+\` (focar), `Ctrl+Alt+\` (zoom p/ seleção), `Ctrl+Alt+→/←` (navegar conexões) e `Ctrl+Shift+M` em `public/js/main.js`, evitando conflito quando digitando — FR-049
@@ -250,11 +250,11 @@
 
 ### Implementation for User Story 10
 
-- [ ] T087 [P] [US10] Adicionar presets Dracula/Catppuccin/Nord e mapear temas Ghostty JSON → `TerminalStyle` em `public/js/terminal.js`; aplicar via menu de tema do terminal — FR-050
-- [ ] T088 [P] [US10] Implementar importação de tema Ghostty em `electron/main.js` (dialog `*.json`, parse, broadcast) + `theme_apply`/`theme_import_ghostty` — FR-050
-- [ ] T089 [US10] Implementar export em `electron/main.js`/`terminal-manager.js`: montar bundle `.maestri` (workspace + notas + roles embutidas, `file-formats.md`) e `dialog.showSaveDialog` — FR-009
-- [ ] T090 [US10] Implementar import `.maestri` em `electron/main.js`: validar bundle, criar workspace (sufixo "(importado)" se id existir), religar diretório vazio, restaurar notas/roles — FR-009
-- [ ] T091 [US10] Registrar protocolo `maestri://` (`app.setAsDefaultProtocolClient`) e handler de deep link (abrir workspace/nota, focar janela) em `electron/main.js` — FR-051
+- [X] T087 [P] [US10] Adicionar presets Dracula/Catppuccin/Nord e mapear temas Ghostty JSON → `TerminalStyle` em `public/js/terminal.js`; aplicar via menu de tema do terminal — FR-050
+- [X] T088 [P] [US10] Implementar importação de tema Ghostty em `electron/main.js` (dialog `*.json`, parse, broadcast) + `theme_apply`/`theme_import_ghostty` — FR-050
+- [X] T089 [US10] Implementar export em `electron/main.js`/`terminal-manager.js`: montar bundle `.maestri` (workspace + notas + roles embutidas, `file-formats.md`) e `dialog.showSaveDialog` — FR-009
+- [X] T090 [US10] Implementar import `.maestri` em `electron/main.js`: validar bundle, criar workspace (sufixo "(importado)" se id existir), religar diretório vazio, restaurar notas/roles — FR-009
+- [X] T091 [US10] Registrar protocolo `maestri://` (`app.setAsDefaultProtocolClient`) e handler de deep link (abrir workspace/nota, focar janela) em `electron/main.js` — FR-051
 - [ ] T092 [P] [US10] Expor workspaces exportados como `.maestri` numa pasta indexável (`~/Maestri`) e notas `.md` acessíveis ao Spotlight no macOS — FR-051
 
 **Checkpoint**: US10 isolada — temas/import, portabilidade `.maestri` e deep link Spotlight.

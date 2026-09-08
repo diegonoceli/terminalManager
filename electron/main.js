@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, Notification, shell, dialog } from "electron";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readFileSync, writeFileSync } from "node:fs";
 import { TerminalManager } from "./terminal-manager.js";
 import { detectAgents } from "./agent-cli.js";
 import { readDir, fsCrud, gitOps, gitDiff, gitGraph, readFileText, writeFileText, fileSearch } from "./filetree-service.js";
@@ -174,6 +175,78 @@ function handleMessage(msg) {
       manager.updateSettings(msg.settings || {});
       broadcastLayout();
       break;
+    case "workspace_export": {
+      const ws = manager.workspaces.get(msg.workspaceId);
+      const name = (ws && ws.name) || "workspace";
+      const bundle = manager.exportWorkspace(msg.workspaceId);
+      if (!bundle) {
+        broadcast({ type: "workspace_export_result", ok: false, error: "Workspace não encontrado." });
+        break;
+      }
+      dialog
+        .showSaveDialog({ title: "Exportar workspace", defaultPath: `${name}.maestri`, filters: [{ name: "Maestri workspace", extensions: ["maestri"] }] })
+        .then((result) => {
+          if (result.canceled || !result.filePath) {
+            broadcast({ type: "workspace_export_result", ok: false, canceled: true });
+            return;
+          }
+          try {
+            writeFileSync(result.filePath, JSON.stringify(bundle, null, 2), "utf8");
+            broadcast({ type: "workspace_export_result", ok: true, path: result.filePath });
+          } catch (err) {
+            broadcast({ type: "workspace_export_result", ok: false, error: err.message });
+          }
+        })
+        .catch(() => broadcast({ type: "workspace_export_result", ok: false, canceled: true }));
+      break;
+    }
+    case "workspace_import": {
+      dialog
+        .showOpenDialog({
+          title: "Importar workspace (.maestri)",
+          properties: ["openFile"],
+          filters: [{ name: "Maestri workspace", extensions: ["maestri"] }],
+        })
+        .then((result) => {
+          if (result.canceled || !result.filePaths[0]) {
+            broadcast({ type: "workspace_import_result", ok: false, canceled: true });
+            return;
+          }
+          try {
+            const bundle = JSON.parse(readFileSync(result.filePaths[0], "utf8"));
+            const id = manager.importWorkspace(bundle);
+            if (!id) {
+              broadcast({ type: "workspace_import_result", ok: false, error: "Arquivo .maestri inválido." });
+              return;
+            }
+            manager.switchWorkspace(id);
+            broadcastLayout();
+            broadcast({ type: "workspace_import_result", ok: true, workspaceId: id, name: manager.workspaces.get(id).name });
+          } catch (err) {
+            broadcast({ type: "workspace_import_result", ok: false, error: err.message });
+          }
+        })
+        .catch(() => broadcast({ type: "workspace_import_result", ok: false, canceled: true }));
+      break;
+    }
+    case "pick_ghostty_theme": {
+      dialog
+        .showOpenDialog({ title: "Importar tema Ghostty", properties: ["openFile"], filters: [{ name: "Ghostty theme", extensions: ["json"] }] })
+        .then((result) => {
+          if (result.canceled || !result.filePaths[0]) {
+            broadcast({ type: "ghostty_theme", canceled: true, theme: null });
+            return;
+          }
+          try {
+            const theme = JSON.parse(readFileSync(result.filePaths[0], "utf8"));
+            broadcast({ type: "ghostty_theme", canceled: false, theme });
+          } catch (err) {
+            broadcast({ type: "ghostty_theme", canceled: true, error: err.message });
+          }
+        })
+        .catch(() => broadcast({ type: "ghostty_theme", canceled: true }));
+      break;
+    }
     case "agent_list_request":
       broadcast({ type: "agent_list", agents: detectAgents() });
       break;
@@ -362,6 +435,28 @@ function createWindow() {
   win.loadFile(join(__dirname, "..", "public", "index.html"));
 }
 
+function openFromUrl(url) {
+  try {
+    const u = new URL(url);
+    const wsId = u.searchParams.get("workspace");
+    if (wsId && manager && manager.workspaces.has(wsId)) {
+      manager.switchWorkspace(wsId);
+      broadcastLayout();
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    }
+  } catch {}
+}
+
+// Deep link maestri:// (Spotlight / navegador) — FR-051
+app.on("open-url", (e, url) => {
+  e.preventDefault();
+  openFromUrl(url);
+});
+
 app.whenReady().then(() => {
   if (process.platform === "win32") {
     app.setAppUserModelId("com.diego.terminalmanager");
@@ -373,6 +468,14 @@ app.whenReady().then(() => {
   manager.setBroadcast(broadcast);
   manager.setNotify(showNotification);
   manager.restore();
+
+  if (process.defaultApp) {
+    if (process.argv.length >= 2) {
+      app.setAsDefaultProtocolClient("maestri", process.execPath, [process.argv[1]]);
+    }
+  } else {
+    app.setAsDefaultProtocolClient("maestri");
+  }
 
   ipcMain.on("msg", (event, payload) => {
     let msg;

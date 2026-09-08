@@ -230,6 +230,34 @@ function handleMessage(msg) {
         app._onSearchResults(msg.query, msg.matches || []);
       }
       break;
+    case "workspace_export_result":
+      toast(msg.ok ? `Workspace exportado: ${msg.path}` : msg.canceled ? "Exportação cancelada." : `Erro ao exportar: ${msg.error}`);
+      break;
+    case "workspace_import_result":
+      if (msg.ok) toast(`Workspace "${msg.name}" importado.`);
+      else if (!msg.canceled) toast(msg.error || "Falha ao importar.");
+      break;
+    case "ghostty_theme": {
+      if (!msg.canceled && msg.theme && msg.theme.background) {
+        const t = msg.theme;
+        applyThemeToActive(
+          {
+            bg: t.background,
+            fg: t.foreground || "#e6e6e6",
+            cursor: t.cursor || t.foreground || "#ececec",
+            cursorAccent: t.cursor_text || t.background,
+            selBg: t.selection_background || "#264f78",
+            selFg: t.foreground || "#ffffff",
+            titlebar: t.background,
+            titlebarText: t.foreground || "#ffffff",
+          },
+          "Ghostty"
+        );
+      } else if (msg.error) {
+        toast("Falha ao importar tema Ghostty: " + msg.error);
+      }
+      break;
+    }
     default:
       break;
   }
@@ -999,6 +1027,46 @@ if (canvasBg) {
     viewport.style.background = canvasBg.value;
     localStorage.setItem("canvas-bg", canvasBg.value);
   });
+}
+
+/* ---------------- Temas de terminal (US10) ---------------- */
+const THEME_PRESETS = {
+  dracula: { bg: "#282a36", fg: "#f8f8f2", cursor: "#f8f8f2", cursorAccent: "#282a36", titlebar: "#1e1f29", titlebarText: "#f8f8f2", selBg: "#44475a", selFg: "#ffffff" },
+  catppuccin: { bg: "#1e1e2e", fg: "#cdd6f4", cursor: "#f5e0dc", cursorAccent: "#1e1e2e", titlebar: "#181825", titlebarText: "#cdd6f4", selBg: "#45475a", selFg: "#ffffff" },
+  nord: { bg: "#2e3440", fg: "#d8dee9", cursor: "#eceff4", cursorAccent: "#2e3440", titlebar: "#3b4252", titlebarText: "#eceff4", selBg: "#434c5e", selFg: "#ffffff" },
+};
+
+function themeSelect() {
+  const sel = document.getElementById("theme-select");
+  if (!sel) return null;
+  if (!themeSelect._bound) {
+    themeSelect._bound = true;
+    sel.addEventListener("change", () => {
+      const v = sel.value;
+      sel.value = "";
+      if (v === "__import__") {
+        if (app.send) send({ type: "pick_ghostty_theme" });
+      } else if (v && THEME_PRESETS[v]) {
+        applyThemeToActive(THEME_PRESETS[v], v);
+      }
+    });
+  }
+  return sel;
+}
+themeSelect();
+
+function applyThemeToActive(style, label) {
+  const w = app.activeId ? app.widgets.get(app.activeId) : null;
+  if (!w || !w.el) {
+    toast("Selecione (foque) um terminal para aplicar o tema.");
+    return;
+  }
+  if (typeof w.applyStyle !== "function") {
+    toast("O nó ativo não é um terminal.");
+    return;
+  }
+  sendStyle(w.id, { ...style });
+  if (label) toast(`Tema ${label} aplicado ao terminal ativo.`);
 }
 
 window.addEventListener("keydown", (e) => {

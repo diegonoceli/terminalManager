@@ -214,6 +214,12 @@
         m.appendChild(d);
       };
       item("Editar", () => this.openModal(w));
+      item("Exportar .maestri", () => {
+        if (this.send) this.send({ type: "workspace_export", workspaceId: w.id });
+      });
+      item("Importar .maestri…", () => {
+        if (this.send) this.send({ type: "workspace_import" });
+      });
       if (w.workingDir) item("Abrir no Editor", () => {
         if (this.send) this.send({ type: "open_vscode", path: w.workingDir });
       });

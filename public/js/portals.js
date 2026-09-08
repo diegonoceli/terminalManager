@@ -53,6 +53,22 @@ class BasePortalWidget {
     }
   }
 
+  /** Snap magnético: alinha a widget vizinho quando Ctrl é mantido (FR-046). */
+  _snapTo(nx, ny) {
+    if (!(this._dragCtrl) ) return { x: nx, y: ny };
+    const tol = 6;
+    let bx = null, by = null;
+    for (const o of this.app.getAllNodes ? this.app.getAllNodes() : []) {
+      if (o.id === this.id || !o.el) continue;
+      const ox = o.worldPos.x, oy = o.worldPos.y, ow = o.worldSize.w, oh = o.worldSize.h;
+      if (Math.abs(nx - (ox + ow)) <= tol && (bx === null || Math.abs(nx - (ox + ow)) < Math.abs(bx - nx))) bx = ox + ow;
+      if (Math.abs(nx + this.worldSize.w - ox) <= tol && (bx === null || Math.abs(nx + this.worldSize.w - ox) < Math.abs(nx - bx))) bx = ox - this.worldSize.w;
+      if (Math.abs(ny - (oy + oh)) <= tol && (by === null || Math.abs(ny - (oy + oh)) < Math.abs(by - ny))) by = oy + oh;
+      if (Math.abs(ny + this.worldSize.h - oy) <= tol && (by === null || Math.abs(ny + this.worldSize.h - oy) < Math.abs(ny - by))) by = oy - this.worldSize.h;
+    }
+    return { x: bx !== null ? bx : nx, y: by !== null ? by : ny };
+  }
+
   _setupDragAndResize(handle, resizeHandle) {
     // Spatial drag
     let dragging = false;
@@ -60,9 +76,10 @@ class BasePortalWidget {
     let startPos = { x: 0, y: 0 };
 
     handle.addEventListener("pointerdown", (e) => {
-      if (e.target.closest("button") || e.target.closest("input")) return;
+      if (e.target.closest("button") || e.target.closest("input") || e.target.closest("textarea")) return;
       if (e.button !== 0) return;
       dragging = true;
+      this._dragCtrl = e.ctrlKey || e.metaKey;
       startPointer = { x: e.clientX, y: e.clientY };
       startPos = { x: this.worldPos.x, y: this.worldPos.y };
       this.el.classList.add("dragging");
@@ -73,11 +90,15 @@ class BasePortalWidget {
 
     handle.addEventListener("pointermove", (e) => {
       if (!dragging) return;
+      this._dragCtrl = e.ctrlKey || e.metaKey;
       const zoom = this.app.canvas.zoom;
       const dx = (e.clientX - startPointer.x) / zoom;
       const dy = (e.clientY - startPointer.y) / zoom;
-      const nx = Math.round(startPos.x + dx);
-      const ny = Math.round(startPos.y + dy);
+      let nx = Math.round(startPos.x + dx);
+      let ny = Math.round(startPos.y + dy);
+      const snapped = this._snapTo(nx, ny);
+      nx = snapped.x;
+      ny = snapped.y;
       this.setPosition(nx, ny);
       this.app.sendMove(this.id, nx, ny);
     });
