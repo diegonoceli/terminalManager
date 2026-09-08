@@ -331,12 +331,15 @@ function removeWidget(id, skipSend = false) {
   if (w) {
     w.dispose();
     app.widgets.delete(id);
+    app.nodeData.delete(id);
   }
   if (app.activeId === id) app.activeId = null;
+  app.selectedIds.delete(id);
   if (!skipSend) {
     send({ type: "remove_node", id });
   }
   if (app.connections) app.connections.redrawAll();
+  if (typeof renderGroupFrames === "function") renderGroupFrames();
   fitMaybe();
 }
 
@@ -952,6 +955,40 @@ function drawMinimap() {
   if (mm.innerHTML !== html) mm.innerHTML = html;
 }
 
+/* ---------------- Badges numerados de terminais (Ctrl mantido) — FR-018 ---------------- */
+function terminalList() {
+  return [...app.widgets.values()].filter((w) => w.el && typeof w.write === "function");
+}
+
+function showTerminalBadges(on) {
+  const layer = document.getElementById("badges-layer");
+  if (!layer) return;
+  layer.innerHTML = "";
+  if (!on) {
+    app._termBadgesOn = false;
+    layer.classList.add("hidden");
+    return;
+  }
+  app._termBadgesOn = true;
+  layer.classList.remove("hidden");
+  const list = terminalList().sort((a, b) => (a.worldPos.y - b.worldPos.y) || (a.worldPos.x - b.worldPos.x));
+  app._termBadgeList = list;
+  list.forEach((w, i) => {
+    if (i > 8) return;
+    const pt = app.canvas.worldToScreen(w.worldPos.x, w.worldPos.y);
+    const chip = document.createElement("span");
+    chip.className = "term-badge";
+    chip.textContent = String(i + 1);
+    chip.style.left = `${pt.x - 6}px`;
+    chip.style.top = `${pt.y - 14}px`;
+    layer.appendChild(chip);
+  });
+}
+
+window.addEventListener("keyup", (e) => {
+  if (e.key === "Control" || e.key === "Meta") showTerminalBadges(false);
+});
+
 /* ---------------- toolbar / botões ---------------- */
 document.getElementById("btn-new")?.addEventListener("click", () => {
   if (window.Settings && window.Settings.openNewTerminal) {
@@ -1081,26 +1118,62 @@ window.addEventListener("keydown", (e) => {
     if (mod && e.key === "\\") { e.preventDefault(); const w = app.activeId ? app.widgets.get(app.activeId) : null; if (w && typeof w.focus === "function") w.focus(); return; }
     if (mod && e.altKey && e.key === "\\") { e.preventDefault(); zoomToSelection(); return; }
   }
-  // Ctrl duplo → números dos workspaces (saltar)
+  // Ctrl duplo → números dos workspaces; Ctrl mantido → badges de terminais (FR-018)
   if ((e.key === "Control" || e.key === "Meta") && !isTyping(e)) {
+    if (!e.repeat) {
+      clearTimeout(app._ctrlBadgeTimer);
+      app._ctrlBadgeTimer = setTimeout(() => {
+        if (!app._ctrlDouble) showTerminalBadges(true);
+      }, 380);
+    }
     const now = Date.now();
     if (now - (app._lastCtrlAt || 0) < 420) {
+      app._ctrlDouble = true;
+      clearTimeout(app._ctrlBadgeTimer);
+      showTerminalBadges(false);
       if (window.WorkspaceSidebar) {
         WorkspaceSidebar.setNumbers(!WorkspaceSidebar.numberMode);
       }
       app._lastCtrlAt = 0;
     } else {
+      app._ctrlDouble = false;
       app._lastCtrlAt = now;
     }
     return;
   }
-  if (mod && e.key === "ArrowUp") { e.preventDefault(); WorkspaceSidebar?.navPrev(); return; }
-  if (mod && e.key === "ArrowDown") { e.preventDefault(); WorkspaceSidebar?.navNext(); return; }
-  if (WorkspaceSidebar?.numberMode && /^[1-9]$/.test(e.key) && !isTyping(e)) {
-    e.preventDefault();
-    WorkspaceSidebar.jumpTo(Number(e.key));
-    WorkspaceSidebar.setNumbers(false);
-    return;
+  if (!isTyping(e)) {
+    if (mod && e.key === "ArrowUp") { e.preventDefault(); WorkspaceSidebar?.navPrev(); return; }
+    if (mod && e.key === "ArrowDown") { e.preventDefault(); WorkspaceSidebar?.navNext(); return; }
+    if (mod && e.shiftKey && e.key.toLowerCase() === "a") {
+      e.preventDefault();
+      const att = [...app.widgets.values()].filter((w) => w.el && w.el.classList.contains("agent-attention"));
+      if (att.length) {
+        const idx = att.findIndex((w) => w.id === app.activeId);
+        const next = att[(idx + 1 + att.length) % att.length];
+        setActive(next.id);
+        if (typeof next.focus === "function") next.focus();
+        focusTerminal(next, true);
+      }
+      return;
+    }
+  }
+  if (/^[1-9]$/.test(e.key) && !isTyping(e)) {
+    if (app._termBadgesOn && app._termBadgeList) {
+      e.preventDefault();
+      const w = app._termBadgeList[Number(e.key) - 1];
+      if (w) {
+        setActive(w.id);
+        focusTerminal(w, true);
+      }
+      showTerminalBadges(false);
+      return;
+    }
+    if (WorkspaceSidebar?.numberMode) {
+      e.preventDefault();
+      WorkspaceSidebar.jumpTo(Number(e.key));
+      WorkspaceSidebar.setNumbers(false);
+      return;
+    }
   }
   if (mod && e.key === "+") { e.preventDefault(); zoomIn(); }
   else if (mod && e.key === "-") { e.preventDefault(); zoomOut(); }

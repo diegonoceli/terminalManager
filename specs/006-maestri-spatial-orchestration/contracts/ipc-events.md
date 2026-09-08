@@ -139,3 +139,13 @@ interface WorkspaceStateBroadcast { type: "workspace_state"; workspaceId: string
 
 - O renderer detecta a versão do broadcast (`layout` v3 traz `workspaces`/`activeWorkspaceId`; v2 trazia `workflows`/`activeWorkflowId`) para continuar funcionando durante a migração.
 - `workspace_switch` não encerra PTYs do workspace anterior — apenas atualiza `workspace_state` (background) e troca a superfície ativa (FR-008/FR-054).
+
+---
+
+## 4. Notas de implementação (delta 006)
+
+- Feixes/abraçadeiras (FR-039): agrupamento por sobreposição via **menu de contexto** da conexão (alternativa ao `Alt+drag`); `bundleId` compartilhado e visual `tie-bundle`.
+- Duplicar nós: `Alt+clique` no cabeçalho (em vez de `Alt+arrastar`); usa snapshot `app.nodeData`.
+- Badges de terminais: segurar `Ctrl` (~380 ms) exibe números; duplo `Ctrl` alterna números de **workspaces** na sidebar.
+- `create_node` com `type:"terminal"` agora spawna PTY real (rota `manager.create`); portais/notas/texto/desenho/árvore usam `createNode`.
+- `open_external` valida URL (fallback `https://`) e trata rejeição de `shell.openExternal`.

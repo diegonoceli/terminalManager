@@ -270,12 +270,17 @@ class ConnectionsManager {
   }
 
   redrawAll() {
-    for (const id of this.connections.keys()) {
-      this.redraw(id);
-    }
-    if (this.activeDrag && this.previewPath) {
-      this._updatePreview();
-    }
+    if (this._rafPending) return;
+    this._rafPending = true;
+    requestAnimationFrame(() => {
+      this._rafPending = false;
+      for (const id of this.connections.keys()) {
+        this.redraw(id);
+      }
+      if (this.activeDrag && this.previewPath) {
+        this._updatePreview();
+      }
+    });
   }
 
   triggerPulse(fromNodeId, toNodeId) {

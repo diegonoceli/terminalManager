@@ -85,9 +85,17 @@ class NoteWidget extends BasePortalWidget {
     });
     this.pinBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      this.pinned = !this.pinned;
-      this.pinBtn.classList.toggle("active", this.pinned);
-      if (this.app.send) this.app.send({ type: "note_pinned", nodeId: this.id, pinned: this.pinned });
+      if (!this.pinned) {
+        const nm = prompt("Renomear nota (fixa o nome):", this.title);
+        if (nm && nm.trim()) {
+          this.title = nm.trim();
+          if (this.titleEl) this.titleEl.textContent = this.title;
+          if (this.app.sendRename) this.app.sendRename(this.id, this.title);
+        }
+      }
+      this.pinned = true;
+      this.pinBtn.classList.add("active");
+      if (this.app.send) this.app.send({ type: "note_pinned", nodeId: this.id, pinned: true });
     });
     this.moveBtn.addEventListener("click", (e) => {
       e.stopPropagation();

@@ -111,7 +111,7 @@
 - [ ] T036 [US3] Atribuir responsabilidade e exibir badge colorido no cabeçalho do terminal em `public/js/terminal.js` (menu do nó) — FR-014
 - [X] T037 [P] [US3] Implementar indicador de atenção em `electron/terminal-manager.js`: heurística de ociosidade do agente (sem saída após burst) + padrões `[y/n]`/`password:` → broadcast `attention{waiting|done}`; notificações reutilizam fluxo `notify` conforme `settings.attentionNotifications` — FR-017
 - [X] T038 [P] [US3] Renderizar ponto de atenção no cabeçalho (`#badges-layer`/`.attention`) em `public/js/terminal.js` e limpar ao focar/novo output (`attention_cleared`)
-- [ ] T039 [US3] Implementar badges numerados em `public/js/main.js`: segurar `Ctrl` mostra números sobre terminais; digitar número foca; `Ctrl+Shift+A` pula ao próximo `.attention` — FR-018/FR-049
+- [X] T039 [US3] Implementar badges numerados em `public/js/main.js`: segurar `Ctrl` mostra números sobre terminais; digitar número foca; `Ctrl+Shift+A` pula ao próximo `.attention` — FR-018/FR-049
 
 **Checkpoint**: US3 isolada — terminais rodam agentes com roles injetadas, persistência role.json, atenção e navegação por badges.
 
@@ -129,10 +129,10 @@
 - [X] T041 [US4] Implementar IPC de notas em `electron/main.js`: `note_create`, `note_content`, `note_move`, `note_pinned`, broadcast `note_updated`/`note_moved` (contrato `ipc-events.md`)
 - [ ] T042 [P] [US4] Implementar `NoteWidget` em `public/js/notes.js`: edição Raw + render Markdown (via `marked` vendored + sanitização whitelist) com alternância, toolbar e colagem de imagem (data URI → arquivo `assets/`)
 - [X] T043 [US4] Registrar fábrica do tipo `note` em `public/js/main.js` (`ensureNode`) e botão de ferramenta "Nota" (inserção por clique/arrasto) na toolbar de `public/index.html`
-- [ ] T044 [US4] Implementar título derivado da primeira linha e ação "Renomear" (fixa `pinnedName`, front matter `file-formats.md`) em `public/js/notes.js` — FR-022
+- [X] T044 [US4] Implementar título derivado da primeira linha e ação "Renomear" (fixa `pinnedName`, front matter `file-formats.md`) em `public/js/notes.js` — FR-022
 - [X] T045 [US4] Implementar "mover para o projeto" (menu do nó) e remoção `⌘W` com confirmação quando arquivo estiver fora da pasta interna — FR-024/FR-025
 - [X] T046 [US4] Garantir encadeamento: notas conectáveis pelo mecanismo de conexões existente (sem task extra de conexão; validar que portas existem nos NoteWidgets) — FR-023
-- [ ] T047 [US4] Aplicar tema/estilo visual do widget de nota e atualizar `removeWidget` para limpar arquivo via `note_delete` quando `internal` — FR-025
+- [X] T047 [US4] Aplicar tema/estilo visual do widget de nota e atualizar `removeWidget` para limpar arquivo via `note_delete` quando `internal` — FR-025
 
 **Checkpoint**: US4 isolada — notas funcionam como arquivos reais com os dois modos de exibição, imagens, nomes, encadeamento e remoção segura.
 
@@ -265,14 +265,14 @@
 
 **Purpose**: Acabamento, robustez e validação transversal do delta.
 
-- [ ] T093 [P] Garantir atalhos globais não conflitam com digitação/agentes (revisar keydown em `public/js/main.js` e `electron/main.js` before-input)
-- [ ] T094 [P] Tratar vazamentos de listeners ao trocar workspaces (dispose de widgets/observers em `public/js/main.js`/widgets) — constraint do plan
-- [ ] T095 Revisar erros/edge cases do spec: diretório inacessível, agente não instalado, nota sem primeira linha, exclusão com arquivo no projeto, conflito git, mudança externa em arquivo, pausa com subprocessos, reinício sem resume
-- [ ] T096 [P] Otimizar redraw de conexões/minimapa para ≥50 FPS com até 100 nós (throttle em `connections.js`/`canvas.js`) — SC-009
-- [ ] T097 [P] Validar persistência/migração: abrir `state.json` v2 de um usuário existente e conferir migração v3 sem perda — FR-053
+- [X] T093 [P] Garantir atalhos globais não conflitam com digitação/agentes (revisar keydown em `public/js/main.js` e `electron/main.js` before-input)
+- [X] T094 [P] Tratar vazamentos de listeners ao trocar workspaces (dispose de widgets/observers em `public/js/main.js`/widgets) — constraint do plan
+- [X] T095 Revisar erros/edge cases do spec: diretório inacessível, agente não instalado, nota sem primeira linha, exclusão com arquivo no projeto, conflito git, mudança externa em arquivo, pausa com subprocessos, reinício sem resume
+- [X] T096 [P] Otimizar redraw de conexões/minimapa para ≥50 FPS com até 100 nós (throttle em `connections.js`/`canvas.js`) — SC-009
+- [X] T097 [P] Validar persistência/migração: abrir `state.json` v2 de um usuário existente e conferir migração v3 sem perda — FR-053
 - [ ] T098 Executar `quickstart.md` de ponta a ponta (todos os fluxos) e corrigir regressões
-- [ ] T099 Atualizar `README.md` com o novo nome/conceitos (Workspaces, Agentes) e `public/index.html` brand/textos se necessário
-- [ ] T100 Revisão final de formato: conferir que `contracts/file-formats.md`, `data-model.md` refletem o implementado (nomes de campos/broadcasts)
+- [X] T099 Atualizar `README.md` com o novo nome/conceitos (Workspaces, Agentes) e `public/index.html` brand/textos se necessário
+- [X] T100 Revisão final de formato: conferir que `contracts/file-formats.md`, `data-model.md` refletem o implementado (nomes de campos/broadcasts)
 
 ---
 

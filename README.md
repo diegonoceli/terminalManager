@@ -1,6 +1,8 @@
 # terminal manager
 
-Aplicativo **desktop** (Electron) com canvas espacial: uma página infinita onde você posiciona vários terminais **reais** (PTY), cada um com nome preso acima, navega com zoom/pan e personaliza cores, fundo e fonte de cada terminal.
+Aplicativo **desktop** (Electron) com canvas espacial: uma página infinita onde você posiciona vários terminais **reais** (PTY), notas Markdown, árvores de arquivos (Git) e agentes CLI (Claude Code/Codex/OpenCode), organizados em **workspaces** com barra lateral — tudo com zoom/pan, conexões entre nós e personalização por terminal.
+
+Detalhes da iteração atual (workspaces, agentes e responsabilidades, notas, árvore de arquivos, conexões avançadas e produtividade de canvas) em `specs/006-maestri-spatial-orchestration/plan.md` e `quickstart.md`.
 
 ## Requisitos
 
@@ -57,7 +59,11 @@ Em qualquer plataforma, `npm run dist` gera o pacote do sistema atual:
 | Zoom 1:1 | `Cmd/Ctrl 0` |
 | Ver tudo (fit) | `V` |
 | Centralizar em (0,0) | `C` |
-| Novo terminal | botão **+ Novo terminal** ou `Cmd/Ctrl N` |
+| Novo terminal | botão **+ Novo terminal** ou `Cmd/Ctrl N` (escolha agente e responsabilidade) |
+| Workspaces | barra lateral: criar/editar com diretório e ícone, pastas, mini barra, `Ctrl+↑/↓`, duplo `Ctrl`+número |
+| Novo nó (Nota/Arquivos/Texto/Desenho) | botões **Nota/Arquivos/Texto/Desenho** na toolbar |
+| Conexões | arrastar das "bolinhas"; **estilo** Corda/Circuito e abraçadeiras via clique direito na linha |
+| Busca de arquivos | `Cmd/Ctrl P` (prefixo `>` = conteúdo) |
 | **Focar terminal ao clicar** | clicar em um terminal anima o canvas até centralizar ele visível no painel; o botão **Focar** na toolbar liga/desliga essa animação |
 | **Nome preso acima** | clicar em **✎** ou no painel ⚙; o nome fica fixo na barra de cada terminal |
 | **Fundo, cores, fonte** | botão **⚙** na barra do terminal: tema (Escuro/Claro/Verde/Azul/Âmbar), cor de fundo, texto, cursor, barra de título e tamanho da fonte |
