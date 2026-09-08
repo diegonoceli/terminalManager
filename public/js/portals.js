@@ -237,6 +237,7 @@ class WebPortalWidget extends BasePortalWidget {
           <button class="portal-btn btn-external icon-btn" title="Abrir no navegador externo">${window.Icons ? window.Icons.svg("external-link", { size: 13 }) : "↗"}</button>
         </div>
         <div class="portal-actions">
+          <button class="portal-btn btn-maximize icon-btn" title="Maximizar / Restaurar">${window.Icons ? window.Icons.svg("maximize-2", { size: 13 }) : "⤢"}</button>
           <button class="portal-btn btn-close icon-btn danger" title="Fechar portal">${window.Icons ? window.Icons.svg("close", { size: 13 }) : "✕"}</button>
         </div>
       </div>
@@ -265,6 +266,19 @@ class WebPortalWidget extends BasePortalWidget {
     el.addEventListener("pointerdown", () => {
       this.app.setActive(this.id);
     });
+
+    // Maximize / Elevate button
+    const maxBtn = el.querySelector(".btn-maximize");
+    if (maxBtn) {
+      maxBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (this.app?.motion?.toggleElevateNode) {
+          this.app.motion.toggleElevateNode(this.id);
+          const isElevated = el.classList.contains("node-elevated");
+          maxBtn.innerHTML = window.Icons ? window.Icons.svg(isElevated ? "minimize-2" : "maximize-2", { size: 13 }) : (isElevated ? "⤡" : "⤢");
+        }
+      });
+    }
 
     // Close button
     el.querySelector(".btn-close").addEventListener("click", (e) => {
@@ -393,6 +407,12 @@ class WebPortalWidget extends BasePortalWidget {
       else this.viewEl.src = this.url;
     }
   }
+
+  setZoom(factor) {
+    if (this.viewEl && typeof this.viewEl.setZoomFactor === "function") {
+      this.viewEl.setZoomFactor(factor);
+    }
+  }
 }
 
 const MOBILE_USER_AGENTS = {
@@ -443,6 +463,7 @@ class DevicePortalWidget extends BasePortalWidget {
         <div class="portal-actions">
           <button class="portal-btn btn-rotate icon-btn" title="Alternar orientação (Retrato / Paisagem)">${window.Icons ? window.Icons.svg("rotate", { size: 13 }) : "🔄"}</button>
           <button class="portal-btn btn-reload icon-btn" title="Recarregar tela">${window.Icons ? window.Icons.svg("refresh-cw", { size: 13 }) : "↻"}</button>
+          <button class="portal-btn btn-maximize icon-btn" title="Maximizar / Restaurar">${window.Icons ? window.Icons.svg("maximize-2", { size: 13 }) : "⤢"}</button>
           <button class="portal-btn btn-close icon-btn danger" title="Fechar emulador">${window.Icons ? window.Icons.svg("close", { size: 13 }) : "✕"}</button>
         </div>
       </div>
@@ -486,6 +507,19 @@ class DevicePortalWidget extends BasePortalWidget {
     el.addEventListener("pointerdown", () => {
       this.app.setActive(this.id);
     });
+
+    // Maximize / Elevate button
+    const maxBtn = el.querySelector(".btn-maximize");
+    if (maxBtn) {
+      maxBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (this.app?.motion?.toggleElevateNode) {
+          this.app.motion.toggleElevateNode(this.id);
+          const isElevated = el.classList.contains("node-elevated");
+          maxBtn.innerHTML = window.Icons ? window.Icons.svg(isElevated ? "minimize-2" : "maximize-2", { size: 13 }) : (isElevated ? "⤡" : "⤢");
+        }
+      });
+    }
 
     el.querySelector(".btn-close").addEventListener("click", (e) => {
       e.stopPropagation();
@@ -542,7 +576,18 @@ class DevicePortalWidget extends BasePortalWidget {
       webview.setAttribute("allowpopups", "true");
       const ua = MOBILE_USER_AGENTS[this.deviceModel] || MOBILE_USER_AGENTS.pixel9;
       webview.setAttribute("useragent", ua);
-      webview.className = "phone-webview";
+      webview.addEventListener("dom-ready", () => {
+        try {
+          webview.executeJavaScript(`
+            if (!document.querySelector('meta[name="viewport"]')) {
+              const meta = document.createElement('meta');
+              meta.name = 'viewport';
+              meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=5.0';
+              document.head.appendChild(meta);
+            }
+          `);
+        } catch {}
+      });
       webview.addEventListener("did-stop-loading", () => {
         try {
           const current = webview.getURL();
@@ -610,6 +655,12 @@ class DevicePortalWidget extends BasePortalWidget {
     const input = this.el.querySelector(".device-url-input");
     if (input) input.value = url;
     this.app.sendUpdateNode(this.id, { url });
+  }
+
+  setZoom(factor) {
+    if (this.viewEl && typeof this.viewEl.setZoomFactor === "function") {
+      this.viewEl.setZoomFactor(factor);
+    }
   }
 
   dispose() {

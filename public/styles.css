@@ -657,31 +657,37 @@ html, body {
 }
 
 .portal-content {
-  flex: 1;
+  flex: 1 1 0%;
   position: relative;
   overflow: hidden;
   background: #ffffff;
   border-radius: 0 0 var(--radius) var(--radius);
-  min-height: 0; /* flexbox: permite encolher ao redimensionar o nó */
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .portal-view-container {
+  flex: 1 1 0%;
   width: 100%;
   height: 100%;
-  flex: 1;
   position: relative;
   overflow: hidden;
   min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .portal-webview {
-  position: absolute;
-  top: 0;
-  left: 0;
+  display: flex !important;
+  flex: 1 1 0% !important;
   width: 100% !important;
   height: 100% !important;
   border: none;
-  display: block;
+  margin: 0;
+  padding: 0;
 }
 
 /* Evitar perda de captura de ponteiro ao arrastar canvas ou redimensionar nós sobre webviews */
@@ -809,23 +815,25 @@ html, body {
 }
 
 .phone-screen-container {
-  flex: 1;
+  flex: 1 1 0%;
   position: relative;
   width: 100%;
-  height: 100%;
   background: #ffffff;
   overflow: hidden;
   min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .phone-webview {
-  position: absolute;
-  top: 0;
-  left: 0;
+  display: flex !important;
+  flex: 1 1 0% !important;
   width: 100% !important;
   height: 100% !important;
   border: none;
-  display: block;
+  margin: 0;
+  padding: 0;
 }
 
 .phone-home-indicator {
@@ -1512,10 +1520,29 @@ details.field summary { cursor: pointer; font-weight: 600; color: var(--muted); 
   left: 50% !important;
   transform: translate(-50%, -50%) !important;
   z-index: 300 !important;
-  max-width: 90vw !important;
-  max-height: 86vh !important;
+  max-width: 92vw !important;
+  max-height: 88vh !important;
   box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.35), 0 0 0 1px var(--panel-border) !important;
   transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease !important;
+}
+.web-portal.node-elevated {
+  width: 90vw !important;
+  height: 86vh !important;
+}
+.device-portal.node-elevated {
+  height: 88vh !important;
+  width: calc(88vh * 9 / 19.5) !important;
+  max-width: 90vw !important;
+}
+.device-portal.landscape.node-elevated {
+  width: 88vw !important;
+  height: calc(88vw * 9 / 19.5) !important;
+  max-height: 88vh !important;
+}
+.term-widget.node-elevated,
+.editor-widget.node-elevated {
+  width: 85vw !important;
+  height: 82vh !important;
 }
 .node-elevation-backdrop {
   position: fixed;

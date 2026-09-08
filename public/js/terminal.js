@@ -133,6 +133,22 @@ class TermWidget {
     });
     titlebar.appendChild(settingsBtn);
 
+    const maxBtn = document.createElement("button");
+    maxBtn.className = "tb-btn icon-btn";
+    maxBtn.innerHTML = window.Icons ? window.Icons.svg("maximize-2", { size: 13 }) : "⤢";
+    maxBtn.title = "Maximizar / Restaurar";
+    maxBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+    maxBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (this.app?.motion?.toggleElevateNode) {
+        this.app.motion.toggleElevateNode(this.id);
+        const isElevated = this.el?.classList.contains("node-elevated");
+        maxBtn.innerHTML = window.Icons ? window.Icons.svg(isElevated ? "minimize-2" : "maximize-2", { size: 13 }) : (isElevated ? "⤡" : "⤢");
+      }
+      setTimeout(() => this.fit(), 310);
+    });
+    titlebar.appendChild(maxBtn);
+
     const delBtn = document.createElement("button");
     delBtn.className = "tb-btn icon-btn danger";
     delBtn.innerHTML = window.Icons ? window.Icons.svg("close", { size: 13 }) : "✕";
