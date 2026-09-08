@@ -4,6 +4,14 @@ class ConnectionsManager {
   constructor(app) {
     this.app = app;
     this.svg = document.getElementById("connections-layer");
+    if (!this.svg) {
+      this.svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      this.svg.id = "connections-layer";
+      this.svg.setAttribute("class", "connections-layer");
+      const world = document.getElementById("world") || document.body;
+      world.prepend(this.svg);
+    }
+    this.defaultStyle = "rope";
     this.connections = new Map();
     this.activeDrag = null;
     this.previewPath = null;
@@ -14,6 +22,11 @@ class ConnectionsManager {
     window.addEventListener("pointermove", (e) => this._onPointerMove(e));
     window.addEventListener("pointerup", (e) => this._onPointerUp(e));
     window.addEventListener("pointercancel", (e) => this._onPointerUp(e));
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && this.activeDrag) {
+        this._cancelDrag();
+      }
+    });
   }
 
   _getNode(id) {
@@ -77,7 +90,10 @@ class ConnectionsManager {
     g.dataset.bundle = conn.bundleId || "";
 
     this.svg.appendChild(g);
-    if (redraw) this.redraw(conn.id);
+    if (redraw) {
+      this.redraw(conn.id);
+      this.triggerPulse(conn.id);
+    }
   }
 
   remove(id) {
@@ -135,14 +151,7 @@ class ConnectionsManager {
   }
 
   _calculateBezier(src, dst) {
-    const dx = Math.abs(dst.x - src.x);
-    const span = Math.max(35, dx * 0.5);
-    const signX = src.x <= dst.x ? 1 : -1;
-    const c1x = src.x + span * signX;
-    const c1y = src.y;
-    const c2x = dst.x - span * signX;
-    const c2y = dst.y;
-    return `M ${src.x} ${src.y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${dst.x} ${dst.y}`;
+    return this._calculatePath(src, dst, { style: this.defaultStyle || "rope" });
   }
 
   _calculateCircuit(src, dst) {
@@ -182,24 +191,57 @@ class ConnectionsManager {
     return `M ${src.x} ${src.y} Q ${c1x} ${c1y} ${tie.x} ${tie.y} Q ${c2x} ${c2y} ${dst.x} ${dst.y}`;
   }
 
-  _pathFor(conn, src, dst, bundleTie) {
+  _calculatePath(src, dst, conn = {}, bundleTie = null) {
     if (conn && conn.bundleId && bundleTie) {
       return this._calculateBundle(src, dst, bundleTie);
     }
-    return conn && conn.style === "circuit" ? this._calculateCircuit(src, dst) : this._calculateRope(src, dst);
+    const style = (conn && conn.style) || this.defaultStyle || "rope";
+    return style === "circuit" ? this._calculateCircuit(src, dst) : this._calculateRope(src, dst);
   }
 
-  /** Emite pulso luminoso de atividade ao longo do cabo por 2s (T023 / FR-015) */
-  triggerPulse(connId, duration = 2000) {
+  _pathFor(conn, src, dst, bundleTie) {
+    return this._calculatePath(src, dst, conn, bundleTie);
+  }
+
+  /** Emite pulso luminoso de atividade ao longo do cabo (T010 / T023 / FR-015) */
+  triggerPulse(connIdOrFromId, maybeToIdOrDuration = 2000) {
+    if (!connIdOrFromId) return;
+
+    // Direct connection ID
+    if (this.connections.has(connIdOrFromId)) {
+      const duration = typeof maybeToIdOrDuration === "number" ? maybeToIdOrDuration : 2000;
+      this._pulseConnection(connIdOrFromId, duration);
+      return;
+    }
+
+    // Node ID(s)
+    const toNodeId = typeof maybeToIdOrDuration === "string" ? maybeToIdOrDuration : null;
+    const duration = typeof maybeToIdOrDuration === "number" ? maybeToIdOrDuration : 2000;
+
+    for (const [id, conn] of this.connections.entries()) {
+      if (
+        (toNodeId && ((conn.from === connIdOrFromId && conn.to === toNodeId) || (conn.from === toNodeId && conn.to === connIdOrFromId))) ||
+        (!toNodeId && (conn.from === connIdOrFromId || conn.to === connIdOrFromId))
+      ) {
+        this._pulseConnection(id, duration);
+      }
+    }
+  }
+
+  _pulseConnection(connId, duration = 2000) {
     const g = this.svg.querySelector(`.connection-group[data-id="${connId}"]`);
     if (!g) return;
+
     const path = g.querySelector(".connection-path");
-    if (!path) return;
-    path.classList.add("conn-pulse");
-    clearTimeout(g._pulseTimer);
-    g._pulseTimer = setTimeout(() => {
-      path.classList.remove("conn-pulse");
-    }, duration);
+    if (path) {
+      path.classList.add("conn-pulse");
+      clearTimeout(g._pulseTimer);
+      g._pulseTimer = setTimeout(() => {
+        path.classList.remove("conn-pulse");
+      }, duration);
+    }
+
+    this._animatePulse(connId);
   }
 
   redraw(id) {
@@ -362,17 +404,6 @@ class ConnectionsManager {
     });
   }
 
-  triggerPulse(fromNodeId, toNodeId) {
-    for (const [id, conn] of this.connections.entries()) {
-      if (
-        (toNodeId && ((conn.from === fromNodeId && conn.to === toNodeId) || (conn.from === toNodeId && conn.to === fromNodeId))) ||
-        (!toNodeId && (conn.from === fromNodeId || conn.to === fromNodeId))
-      ) {
-        this._animatePulse(id);
-      }
-    }
-  }
-
   _animatePulse(connId) {
     const g = this.svg.querySelector(`.connection-group[data-id="${connId}"]`);
     if (!g) return;
@@ -407,7 +438,7 @@ class ConnectionsManager {
     if (!w) return;
 
     const canvas = this.app.canvas;
-    const worldPt = canvas.screenToWorld(clientX, clientY);
+    const worldPt = canvas ? canvas.screenToWorld(clientX, clientY) : { x: clientX, y: clientY };
 
     this.activeDrag = {
       fromId: sourceNodeId,
@@ -424,8 +455,27 @@ class ConnectionsManager {
 
   _onPointerMove(e) {
     if (!this.activeDrag) return;
-    const worldPt = this.app.canvas.screenToWorld(e.clientX, e.clientY);
+    const canvas = this.app.canvas;
+    const worldPt = canvas ? canvas.screenToWorld(e.clientX, e.clientY) : { x: e.clientX, y: e.clientY };
     this.activeDrag.currentWorld = worldPt;
+
+    // Highlight candidate target node
+    for (const node of this._getAllNodes()) {
+      if (!node.el) continue;
+      if (node.id === this.activeDrag.fromId) {
+        node.el.classList.remove("drag-over");
+        continue;
+      }
+      const rect = node.el.getBoundingClientRect();
+      const isOver = (
+        e.clientX >= rect.left &&
+        e.clientX <= rect.right &&
+        e.clientY >= rect.top &&
+        e.clientY <= rect.bottom
+      );
+      node.el.classList.toggle("drag-over", isOver);
+    }
+
     this._updatePreview();
   }
 
@@ -436,20 +486,41 @@ class ConnectionsManager {
 
     const p = w.worldPos;
     const s = w.worldSize;
-    const src = { x: p.x + s.w, y: p.y + s.h / 2 };
     const dst = this.activeDrag.currentWorld;
 
-    const d = this._calculateBezier(src, dst);
+    // Adaptive anchor based on cursor position relative to source node center
+    const centerX = p.x + s.w / 2;
+    const centerY = p.y + s.h / 2;
+    const isLeft = dst.x < centerX;
+    const src = {
+      x: isLeft ? p.x : p.x + s.w,
+      y: centerY,
+    };
+
+    const d = this._calculatePath(src, dst, { style: this.defaultStyle || "rope" });
     this.previewPath.setAttribute("d", d);
+  }
+
+  _cancelDrag() {
+    for (const node of this._getAllNodes()) {
+      if (node.el) node.el.classList.remove("drag-over");
+    }
+    if (this.previewPath) {
+      this.previewPath.remove();
+      this.previewPath = null;
+    }
+    this.activeDrag = null;
   }
 
   _onPointerUp(e) {
     if (!this.activeDrag) return;
 
-    // Find node under pointer
+    const fromId = this.activeDrag.fromId;
     let targetNodeId = null;
+
+    // Find node under pointer
     for (const node of this._getAllNodes()) {
-      if (node.id === this.activeDrag.fromId) continue;
+      if (node.id === fromId) continue;
       if (!node.el) continue;
       const rect = node.el.getBoundingClientRect();
       if (
@@ -463,18 +534,22 @@ class ConnectionsManager {
       }
     }
 
-    if (targetNodeId) {
-      this.app.sendCreateConnection({
-        from: this.activeDrag.fromId,
-        to: targetNodeId,
-      });
+    if (targetNodeId && targetNodeId !== fromId) {
+      // Avoid duplicate connections in either direction
+      const isDuplicate = [...this.connections.values()].some(
+        (c) => (c.from === fromId && c.to === targetNodeId) ||
+               (c.from === targetNodeId && c.to === fromId)
+      );
+      if (!isDuplicate && this.app.sendCreateConnection) {
+        this.app.sendCreateConnection({
+          from: fromId,
+          to: targetNodeId,
+          style: this.defaultStyle || "rope",
+        });
+      }
     }
 
-    if (this.previewPath) {
-      this.previewPath.remove();
-      this.previewPath = null;
-    }
-    this.activeDrag = null;
+    this._cancelDrag();
   }
 }
 

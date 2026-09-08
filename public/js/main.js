@@ -28,9 +28,7 @@ window.app = app;
 if (typeof FloatingDock === "function") {
   app.floatingDock = new FloatingDock(document.body, app);
 }
-if (typeof PromptComposer === "function") {
-  app.promptComposer = new PromptComposer(world, app);
-}
+
 
 app.motion = {
   isReduced() {
@@ -452,11 +450,6 @@ function setActive(id) {
   if (w) {
     bringNodeToFront(w);
     if (typeof w.focus === "function") w.focus();
-    if (app.promptComposer && typeof app.promptComposer.attachTo === "function") {
-      app.promptComposer.attachTo(w);
-    }
-  } else if (app.promptComposer && typeof app.promptComposer.detach === "function") {
-    app.promptComposer.detach();
   }
 }
 

@@ -694,9 +694,6 @@ class TermWidget {
     this.el.style.left = `${x}px`;
     this.el.style.top = `${y}px`;
     if (this.app.connections) this.app.connections.redrawAll();
-    if (this.app.promptComposer && this.app.activeId === this.id) {
-      this.app.promptComposer.syncPosition();
-    }
   }
 
   setSize(w, h) {
@@ -706,9 +703,6 @@ class TermWidget {
     this.el.style.height = `${h}px`;
     this.fit();
     if (this.app.connections) this.app.connections.redrawAll();
-    if (this.app.promptComposer && this.app.activeId === this.id) {
-      this.app.promptComposer.syncPosition();
-    }
   }
 
   dispose() {
@@ -741,14 +735,20 @@ class TermWidget {
     handle.addEventListener("pointerdown", (e) => this._onResizeStart(e));
 
     const portRight = this.el.querySelector(".conn-port.port-right");
-    if (portRight) {
-      portRight.addEventListener("pointerdown", (e) => {
-        e.stopPropagation();
-        if (this.app.connections) {
-          this.app.connections.startDrag(this.id, e.clientX, e.clientY);
-        }
-      });
-    }
+    const portLeft = this.el.querySelector(".conn-port.port-left");
+    const bindPort = (port) => {
+      if (port) {
+        port.addEventListener("pointerdown", (e) => {
+          if (e.button !== 0) return;
+          e.stopPropagation();
+          if (this.app.connections) {
+            this.app.connections.startDrag(this.id, e.clientX, e.clientY);
+          }
+        });
+      }
+    };
+    bindPort(portRight);
+    bindPort(portLeft);
 
     this.termHost.addEventListener("click", (e) => {
       e.stopPropagation();

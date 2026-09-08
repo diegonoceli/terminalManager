@@ -9,7 +9,7 @@
 
 **Purpose**: Verificação das estruturas de conexões e ambiente de desenvolvimento
 
-- [ ] T001 Validar ambiente de execução e sintaxe base de `public/js/connections.js`
+- [X] T001 Validar ambiente de execução e sintaxe base de `public/js/connections.js`
 
 ---
 
@@ -19,8 +19,8 @@
 
 **⚠️ CRITICAL**: Nenhuma interação de fio de conexão funciona sem a restauração dos métodos de cálculo de curva
 
-- [ ] T002 Implementar método de compatibilidade `_calculateBezier(src, dst)` delegando para `_calculatePath` em `public/js/connections.js`
-- [ ] T003 Configurar estilo padrão de pré-visualização e inicialização da camada SVG `#connections-layer` em `public/js/connections.js`
+- [X] T002 Implementar método de compatibilidade `_calculateBezier(src, dst)` delegando para `_calculatePath` em `public/js/connections.js`
+- [X] T003 Configurar estilo padrão de pré-visualização e inicialização da camada SVG `#connections-layer` em `public/js/connections.js`
 
 **Checkpoint**: Base de cálculo geométrico restaurada — o traçado interativo pode agora ser corrigido e testado
 
@@ -34,10 +34,10 @@
 
 ### Implementation for User Story 1
 
-- [ ] T004 [US1] Corrigir chamada em `_updatePreview()` para invocar `this._calculatePath(src, dst, { style: this.defaultStyle || "rope" })` em `public/js/connections.js`
-- [ ] T005 [P] [US1] Ajustar tratamento de coordenadas cartesianas no `startDrag` e `_onPointerMove` considerando a escala de zoom do canvas em `public/js/connections.js`
-- [ ] T006 [P] [US1] Assegurar estilização visual e visibilidade da classe `.conn-preview-line` em `public/styles.css`
-- [ ] T007 [US1] Adicionar listener de teclado para cancelamento gracioso do traço ao pressionar a tecla Escape em `public/js/connections.js`
+- [X] T004 [US1] Corrigir chamada em `_updatePreview()` para invocar `this._calculatePath(src, dst, { style: this.defaultStyle || "rope" })` em `public/js/connections.js`
+- [X] T005 [P] [US1] Ajustar tratamento de coordenadas cartesianas no `startDrag` e `_onPointerMove` considerando a escala de zoom do canvas em `public/js/connections.js`
+- [X] T006 [P] [US1] Assegurar estilização visual e visibilidade da classe `.conn-preview-line` em `public/styles.css`
+- [X] T007 [US1] Adicionar listener de teclado para cancelamento gracioso do traço ao pressionar a tecla Escape em `public/js/connections.js`
 
 **Checkpoint**: Traçado provisório 100% funcional no arraste, eliminando o erro crítico no console e entregando o MVP.
 
@@ -51,10 +51,10 @@
 
 ### Implementation for User Story 2
 
-- [ ] T008 [US2] Aprimorar detecção de nó destino no `_onPointerUp` com validação contra conexões cíclicas reflexivas (`fromId === toId`) em `public/js/connections.js`
-- [ ] T009 [P] [US2] Verificar despacho da mensagem `create_connection` e atualização do mapa de conexões ativas em `public/js/main.js`
-- [ ] T010 [P] [US2] Garantir acionamento do pulso luminoso `triggerPulse(conn.id, 2000)` ao confirmar a criação do cabo em `public/js/connections.js`
-- [ ] T011 [US2] Validar disparadores de porta lateral em todos os widgets (Terminal, Web Portal, Device Portal, Editor, Nota, Árvore de Arquivos, Texto e Desenho) em `public/js/portals.js`, `public/js/terminal.js` e `public/js/widgets/textdraw.js`
+- [X] T008 [US2] Aprimorar detecção de nó destino no `_onPointerUp` com validação contra conexões cíclicas reflexivas (`fromId === toId`) em `public/js/connections.js`
+- [X] T009 [P] [US2] Verificar despacho da mensagem `create_connection` e atualização do mapa de conexões ativas em `public/js/main.js`
+- [X] T010 [P] [US2] Garantir acionamento do pulso luminoso `triggerPulse(conn.id, 2000)` ao confirmar a criação do cabo em `public/js/connections.js`
+- [X] T011 [US2] Validar disparadores de porta lateral em todos os widgets (Terminal, Web Portal, Device Portal, Editor, Nota, Árvore de Arquivos, Texto e Desenho) em `public/js/portals.js`, `public/js/terminal.js` e `public/js/widgets/textdraw.js`
 
 **Checkpoint**: Conexões persistentes criadas com sucesso entre qualquer par de nós do canvas espacial.
 
@@ -68,8 +68,8 @@
 
 ### Implementation for User Story 3
 
-- [ ] T012 [US3] Sincronizar chamadas de `this.app.connections.redrawAll()` nos métodos `setPosition` e `setSize` de `public/js/portals.js` e `public/js/terminal.js`
-- [ ] T013 [P] [US3] Otimizar cálculo de pontos de ancoragem esquerda e direita baseados na posição relativa dos nós em `public/js/connections.js`
+- [X] T012 [US3] Sincronizar chamadas de `this.app.connections.redrawAll()` nos métodos `setPosition` e `setSize` de `public/js/portals.js` e `public/js/terminal.js`
+- [X] T013 [P] [US3] Otimizar cálculo de pontos de ancoragem esquerda e direita baseados na posição relativa dos nós em `public/js/connections.js`
 
 **Checkpoint**: Cabos completamente sincronizados e reativos à manipulação espacial dos nós.
 
@@ -79,8 +79,8 @@
 
 **Purpose**: Testes automatizados, verificação de regressão e garantia de qualidade
 
-- [ ] T014 [P] Criar teste automatizado headless com Electron para validar o fluxo completo de arraste, criação de conexão e ausência de erros no console em `scratch/test-connections-wire.cjs`
-- [ ] T015 Executar verificação de sintaxe `node -c` em todos os arquivos modificados e testar inicialização sem avisos de runtime
+- [X] T014 [P] Criar teste automatizado headless com Electron para validar o fluxo completo de arraste, criação de conexão e ausência de erros no console em `scratch/test-connections-wire.cjs`
+- [X] T015 Executar verificação de sintaxe `node -c` em todos os arquivos modificados e testar inicialização sem avisos de runtime
 
 ---
 
