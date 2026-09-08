@@ -2014,6 +2014,14 @@ app.canvas.onZoom = (z) => {
   if (zoomReadout) {
     zoomReadout.textContent = `${Math.round(z * 100)}%`;
   }
+  // Redesenhar conexões após mudança de zoom (FR-001)
+  if (app.connections) app.connections.redrawAll();
+};
+
+app.canvas.onPan = () => {
+  // Redesenhar conexões após pan — as coordenadas mundo dos nós são invariantes
+  // mas o redraw garante que paths usem os valores corretos de worldPos (FR-001)
+  if (app.connections) app.connections.redrawAll();
 };
 
 app.canvas.onEmptyDrag = () => app.closeAllSettings();

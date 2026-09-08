@@ -535,8 +535,6 @@ html, body {
   stroke: url(#conn-gradient);
   stroke-width: 2.5px;
   stroke-linecap: round;
-  stroke-dasharray: 6 4;
-  animation: connection-flow 25s linear infinite;
 }
 
 .connection-group:hover .connection-path {
@@ -1990,7 +1988,14 @@ details.field summary { cursor: pointer; font-weight: 600; color: var(--muted); 
 .connection-group.bundle-member path.connection-path { opacity: 0.4; }
 .connection-group.bundle-member path.connection-path-bg { opacity: 0.25; }
 .tie-bundle { fill: #1f1f1e; stroke: #fff; stroke-width: 1; opacity: 0.9; }
-.connection-group[data-style="circuit"] path.connection-path { stroke-dasharray: none; }
+.connection-group[data-style="circuit"] path.connection-path {
+  stroke: #06b6d4;
+  stroke-dasharray: 8 4;
+  animation: connection-flow 20s linear infinite;
+}
+.connection-group[data-style="circuit"] path.connection-path-bg {
+  stroke: rgba(6, 182, 212, 0.2);
+}
 
 /* ---------- Texto & Desenho (US8) ---------- */
 .text-widget .text-content {

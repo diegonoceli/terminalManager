@@ -122,38 +122,51 @@ class ConnectionsManager {
 
   _getAnchorPoints(w1, w2) {
     const p1 = w1.worldPos;
-    const s1 = w1.worldSize;
     const p2 = w2.worldPos;
-    const s2 = w2.worldSize;
 
-    // Center coordinates
-    const c1 = { x: p1.x + s1.w / 2, y: p1.y + s1.h / 2 };
-    const c2 = { x: p2.x + s2.w / 2, y: p2.y + s2.h / 2 };
+    // Normalizar { w, h } e { width, height } — ambos os formatos são válidos
+    const sw1 = w1.worldSize?.w ?? w1.worldSize?.width ?? 200;
+    const sh1 = w1.worldSize?.h ?? w1.worldSize?.height ?? 150;
+    const sw2 = w2.worldSize?.w ?? w2.worldSize?.width ?? 200;
+    const sh2 = w2.worldSize?.h ?? w2.worldSize?.height ?? 150;
 
-    let src = { x: p1.x + s1.w, y: c1.y };
-    let dst = { x: p2.x, y: c2.y };
+    // Centro de cada nó
+    const c1 = { x: p1.x + sw1 / 2, y: p1.y + sh1 / 2 };
+    const c2 = { x: p2.x + sw2 / 2, y: p2.y + sh2 / 2 };
+
+    // Porta de saída: borda mais próxima ao outro nó (esquerda ou direita, centrada verticalmente)
+    let src = { x: p1.x + sw1, y: c1.y };
+    let dst = { x: p2.x,       y: c2.y };
 
     if (c1.x > c2.x) {
-      src = { x: p1.x, y: c1.y };
-      dst = { x: p2.x + s2.w, y: c2.y };
+      src = { x: p1.x,       y: c1.y };
+      dst = { x: p2.x + sw2, y: c2.y };
     }
 
     return { src, dst };
   }
 
   _calculateRope(src, dst) {
-    const dx = Math.abs(dst.x - src.x);
-    const dy = Math.abs(dst.y - src.y);
+    const dx = dst.x - src.x;
+    const dy = dst.y - src.y;
     const dist = Math.hypot(dx, dy);
-    // Flecha do arco (sag) com física de gravidade natural (T020 / FR-012)
-    const sag = Math.min(160, Math.max(20, dist * 0.18 + 12));
-    const span = Math.max(45, dx * 0.52);
-    const signX = src.x <= dst.x ? 1 : -1;
+
+    // Flecha do arco (sag) proporcional à distância (FR-003)
+    const sag = Math.min(180, Math.max(20, dist * 0.18 + 12));
+
+    // Conexão predominantemente vertical → curva em S lateral suave
+    if (Math.abs(dx) < Math.abs(dy) * 0.5) {
+      const lat = sag * 0.55;
+      const midY = src.y + dy * 0.5;
+      return `M ${src.x} ${src.y} C ${src.x + lat} ${midY}, ${dst.x - lat} ${midY}, ${dst.x} ${dst.y}`;
+    }
+
+    // Conexão horizontal ou diagonal → corda com sag gravitacional para baixo
+    const signX = dx >= 0 ? 1 : -1;
+    const span = Math.max(60, Math.abs(dx) * 0.5);
     const c1x = src.x + span * signX;
-    const c1y = src.y + sag;
     const c2x = dst.x - span * signX;
-    const c2y = dst.y + sag;
-    return `M ${src.x} ${src.y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${dst.x} ${dst.y}`;
+    return `M ${src.x} ${src.y} C ${c1x} ${src.y + sag}, ${c2x} ${dst.y + sag}, ${dst.x} ${dst.y}`;
   }
 
   _calculateBezier(src, dst) {
@@ -381,8 +394,12 @@ class ConnectionsManager {
       if (!w1 || !w2) return null;
       const minX = Math.min(w1.worldPos.x, w2.worldPos.x);
       const minY = Math.min(w1.worldPos.y, w2.worldPos.y);
-      const maxX = Math.max(w1.worldPos.x + w1.worldSize.w, w2.worldPos.x + w2.worldSize.w);
-      const maxY = Math.max(w1.worldPos.y + w1.worldSize.h, w2.worldPos.y + w2.worldSize.h);
+      const w1w = w1.worldSize?.w ?? w1.worldSize?.width ?? 0;
+      const w1h = w1.worldSize?.h ?? w1.worldSize?.height ?? 0;
+      const w2w = w2.worldSize?.w ?? w2.worldSize?.width ?? 0;
+      const w2h = w2.worldSize?.h ?? w2.worldSize?.height ?? 0;
+      const maxX = Math.max(w1.worldPos.x + w1w, w2.worldPos.x + w2w);
+      const maxY = Math.max(w1.worldPos.y + w1h, w2.worldPos.y + w2h);
       return { minX, minY, maxX, maxY };
     };
     const a = box(conn);

@@ -105,6 +105,7 @@ class Canvas {
     this.grid.style.setProperty("--canvas-dot-color", `rgba(255, 255, 255, ${dotAlpha})`);
 
     if (this.onZoom) this.onZoom(this.zoom);
+    if (this.onPan) this.onPan(this.tx, this.ty, this.zoom);
   }
 
   screenToWorld(sx, sy) {
