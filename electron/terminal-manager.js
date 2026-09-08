@@ -45,6 +45,8 @@ export class TerminalManager {
 
     this.settings = { ...DEFAULT_SETTINGS };
     this.ui = { sidebar: { collapsed: false }, folders: [], sections: [] };
+    this.folders = [];
+    this.groups = [];
 
     this.broadcast = null;
     this.notifyCallback = null;
@@ -88,6 +90,12 @@ export class TerminalManager {
       const { state } = migrateState(data);
       this.ui = state.ui;
       this.settings = state.settings;
+      this.folders = Array.isArray(state.folders) ? state.folders : (Array.isArray(this.ui?.folders) ? this.ui.folders : []);
+      this.groups = Array.isArray(state.groups) ? state.groups : (Array.isArray(this.ui?.sections) ? this.ui.sections : []);
+      if (this.ui) {
+        this.ui.folders = this.folders;
+        this.ui.sections = this.groups;
+      }
       if (Array.isArray(state.roles)) this.settings.roles = state.roles;
       for (const ws of state.workspaces || []) {
         this.workspaces.set(ws.id, {
@@ -139,7 +147,13 @@ export class TerminalManager {
         version: 3,
         activeWorkspaceId: this.activeWorkspaceId,
         workspaces: [...this.workspaces.values()],
-        ui: this.ui,
+        folders: this.folders || [],
+        groups: this.groups || [],
+        ui: {
+          ...this.ui,
+          folders: this.folders || [],
+          sections: this.groups || [],
+        },
         settings: this.settings,
         roles: this.settings.roles || [],
       };
@@ -248,6 +262,9 @@ export class TerminalManager {
   listWorkspaces() {
     return [...this.workspaces.values()].map((ws) => {
       const instructions = this._hydrateInstructions(ws);
+      const terminals = (ws.nodes || [])
+        .filter((n) => n.type === "terminal" || !n.type)
+        .map((n) => ({ id: n.id, title: n.title, icon: n.icon }));
       return {
         id: ws.id,
         name: ws.name,
@@ -256,6 +273,7 @@ export class TerminalManager {
         nodeCount: (ws.nodes || []).length,
         dirMissing: !!(ws.workingDir && !existsSync(ws.workingDir)),
         instructions: instructions || { source: "none", syncBetween: false },
+        terminals,
       };
     });
   }
@@ -380,10 +398,17 @@ export class TerminalManager {
   }
 
   sidebarFolder(action, payload = {}) {
-    const folders = this.ui.folders || (this.ui.folders = []);
+    const folders = this.folders || (this.folders = []);
     if (action === "add") {
-      const f = { id: `f_${randomUUID().slice(0, 6)}`, name: payload.name || "Nova pasta", workspaceIds: [] };
+      const f = {
+        id: `folder_${randomUUID().slice(0, 8)}`,
+        name: payload.name || "Nova pasta",
+        collapsed: false,
+        workspaceIds: [],
+        createdAt: new Date().toISOString(),
+      };
       folders.push(f);
+      this.ui.folders = folders;
       this.saveLayout();
       return f;
     }
@@ -395,40 +420,115 @@ export class TerminalManager {
       }
       return f;
     }
+    if (action === "toggle") {
+      const f = folders.find((x) => x.id === payload.id);
+      if (f) {
+        f.collapsed = typeof payload.collapsed === "boolean" ? payload.collapsed : !f.collapsed;
+        this.saveLayout();
+      }
+      return f;
+    }
     if (action === "delete") {
       const i = folders.findIndex((x) => x.id === payload.id);
       if (i >= 0) {
         folders.splice(i, 1);
+        this.ui.folders = folders;
         this.saveLayout();
+        return true;
       }
     }
     return null;
   }
 
   sidebarSection(action, payload = {}) {
-    const sections = this.ui.sections || (this.ui.sections = []);
+    const groups = this.groups || (this.groups = []);
     if (action === "add") {
-      const s = { id: `sec_${randomUUID().slice(0, 6)}`, title: payload.title || "Nova seção" };
-      sections.push(s);
+      const s = {
+        id: `group_${randomUUID().slice(0, 8)}`,
+        name: payload.name || payload.title || "Novo grupo",
+        order: typeof payload.order === "number" ? payload.order : groups.length,
+      };
+      groups.push(s);
+      this.ui.sections = groups;
       this.saveLayout();
       return s;
     }
     if (action === "rename") {
-      const s = sections.find((x) => x.id === payload.id);
+      const s = groups.find((x) => x.id === payload.id);
       if (s) {
-        s.title = payload.title || s.title;
+        s.name = payload.name || payload.title || s.name;
         this.saveLayout();
       }
       return s;
     }
     if (action === "delete") {
-      const i = sections.findIndex((x) => x.id === payload.id);
+      const i = groups.findIndex((x) => x.id === payload.id);
       if (i >= 0) {
-        sections.splice(i, 1);
+        groups.splice(i, 1);
+        this.ui.sections = groups;
         this.saveLayout();
+        return true;
       }
     }
     return null;
+  }
+
+  listFolders() {
+    return this.folders || [];
+  }
+
+  createFolder({ name }) {
+    return this.sidebarFolder("add", { name });
+  }
+
+  deleteFolder(folderId) {
+    return this.sidebarFolder("delete", { id: folderId });
+  }
+
+  toggleFolder(folderId, collapsed) {
+    return this.sidebarFolder("toggle", { id: folderId, collapsed });
+  }
+
+  addWorkspaceToFolder(folderId, workspaceId) {
+    for (const f of this.folders) {
+      f.workspaceIds = (f.workspaceIds || []).filter((id) => id !== workspaceId);
+    }
+    const target = this.folders.find((f) => f.id === folderId);
+    if (target) {
+      target.workspaceIds.push(workspaceId);
+      this.ui.folders = this.folders;
+      this.saveLayout();
+      return target;
+    }
+    return null;
+  }
+
+  removeWorkspaceFromFolder(workspaceId) {
+    let changed = false;
+    for (const f of this.folders) {
+      const before = f.workspaceIds.length;
+      f.workspaceIds = (f.workspaceIds || []).filter((id) => id !== workspaceId);
+      if (f.workspaceIds.length !== before) changed = true;
+    }
+    if (changed) {
+      this.ui.folders = this.folders;
+      this.saveLayout();
+    }
+    return changed;
+  }
+
+  listGroups() {
+    return this.groups || [];
+  }
+
+  createGroup({ name, order }) {
+    const s = this.sidebarSection("add", { name });
+    if (typeof order === "number" && s) s.order = order;
+    return s;
+  }
+
+  deleteGroup(groupId) {
+    return this.sidebarSection("delete", { id: groupId });
   }
 
   deleteWorkspace(workspaceId) {
@@ -617,6 +717,7 @@ export class TerminalManager {
       "device-portal": { title: "Pixel 9", width: 380, height: 740 },
       "code-editor": { title: "Code Editor", width: 700, height: 450 },
       note: { title: "Nota", width: 360, height: 300 },
+      binder: { title: "", width: 440, height: 380 },
       "file-tree": { title: "Arquivos", width: 360, height: 480 },
       text: { title: "Texto", width: 260, height: 120 },
       drawing: { title: "Desenho", width: 360, height: 260 },
@@ -635,13 +736,35 @@ export class TerminalManager {
       workspaceId: this.activeWorkspaceId,
     };
 
-    // Nota: garante arquivo .md interno na criação (FR-019)
-    if (type === "note" && this.noteStore) {
-      const file = this.noteStore.create(this.activeWorkspaceId, id, { title: node.title });
-      node.filePath = file;
-      node.internal = true;
-      node.pinned = !!nodeData.pinned;
-      node.view = nodeData.view || "raw";
+    // Nota: garante arquivo .md interno na criação (FR-019), exceto se nota externa com filePath
+    if (type === "note") {
+      if (nodeData.internal !== false && !nodeData.filePath && this.noteStore) {
+        const file = this.noteStore.create(this.activeWorkspaceId, id, { title: node.title });
+        node.filePath = file;
+        node.internal = true;
+        node.pinned = !!nodeData.pinned;
+        node.view = nodeData.view || "raw";
+      } else {
+        node.filePath = nodeData.filePath || "";
+        node.internal = nodeData.internal === false ? false : true;
+        node.pinned = !!nodeData.pinned;
+        node.view = nodeData.view || "raw";
+      }
+    }
+
+    if (type === "binder") {
+      node.title = nodeData.title || "";
+      node.named = !!(nodeData.title && nodeData.title.trim()) || !!nodeData.named;
+      node.uniformColor = nodeData.uniformColor || null;
+      node.pageIds = Array.isArray(nodeData.pageIds) ? [...nodeData.pageIds] : [];
+      node.activePageId = nodeData.activePageId || (node.pageIds[0] || "");
+      for (const pid of node.pageIds) {
+        const pageNode = this.nodes.get(pid);
+        if (pageNode) {
+          pageNode.binderId = id;
+          if (node.uniformColor) pageNode.color = node.uniformColor;
+        }
+      }
     }
 
     if (ws) {
@@ -666,9 +789,13 @@ export class TerminalManager {
   }
 
   noteRead(nodeId) {
-    const node = this._noteConfig(nodeId);
-    if (!node || !this.noteStore) return "";
-    const file = node.filePath || this.noteStore.internalFile(this.activeWorkspaceId, nodeId);
+    const node = this.nodes.get(nodeId);
+    if (node && node.type === "binder") {
+      return this.binderRead(nodeId);
+    }
+    const n = this._noteConfig(nodeId);
+    if (!n || !this.noteStore) return "";
+    const file = n.filePath || this.noteStore.internalFile(this.activeWorkspaceId, nodeId);
     return this.noteStore.read(file);
   }
 
@@ -711,10 +838,158 @@ export class TerminalManager {
   noteDeleteFile(nodeId) {
     const node = this._noteConfig(nodeId);
     if (!node || !this.noteStore) return;
-    if (node.filePath || node.internal) {
+    if (node.internal !== false && (node.filePath || node.internal)) {
       const file = node.filePath || this.noteStore.internalFile(this.activeWorkspaceId, nodeId);
       this.noteStore.delete(file);
     }
+  }
+
+  noteSaveImage(nodeId, bufferBase64, extension = "png") {
+    if (!bufferBase64) return { ok: false, error: "Buffer vazio" };
+    const ws = this.currentWorkspace();
+    const cleanExt = extension.replace(/^\./, "") || "png";
+    const filename = `img_${Date.now().toString(36)}_${randomUUID().slice(0, 4)}.${cleanExt}`;
+    let dir = "";
+    let relativePath = "";
+
+    if (ws && ws.workingDir && existsSync(ws.workingDir)) {
+      dir = join(ws.workingDir, ".maestri", "assets");
+      relativePath = `.maestri/assets/${filename}`;
+    } else if (this.noteStore && this.noteStore.dir) {
+      dir = join(this.noteStore.dir, "assets");
+      relativePath = `assets/${filename}`;
+    } else {
+      dir = join(dirname(this.STATE_FILE || process.cwd()), "assets");
+      relativePath = `assets/${filename}`;
+    }
+
+    try {
+      mkdirSync(dir, { recursive: true });
+      const fullPath = join(dir, filename);
+      const buf = Buffer.from(bufferBase64, "base64");
+      writeFileSync(fullPath, buf);
+      return { ok: true, fullPath, relativePath, filename };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  }
+
+  /* ---------------- Fichários (Binders) ---------------- */
+
+  binderCreate(data = {}) {
+    const named = !!(data.title && data.title.trim());
+    const noteIds = Array.isArray(data.noteIds) ? [...data.noteIds] : [];
+    const binder = this.createNode({
+      id: data.id || `binder_${randomUUID().slice(0, 8)}`,
+      type: "binder",
+      title: data.title || "",
+      named,
+      uniformColor: data.uniformColor || null,
+      pageIds: noteIds,
+      activePageId: noteIds[0] || "",
+      x: data.x,
+      y: data.y,
+      width: data.width,
+      height: data.height,
+    });
+    for (const nid of noteIds) {
+      const n = this.nodes.get(nid);
+      if (n) {
+        n.binderId = binder.id;
+        if (binder.uniformColor) n.color = binder.uniformColor;
+      }
+    }
+    this.saveLayout();
+    return binder;
+  }
+
+  binderAddPage(binderId, noteId) {
+    const binder = this.nodes.get(binderId);
+    if (!binder || binder.type !== "binder") return null;
+    binder.pageIds = Array.isArray(binder.pageIds) ? binder.pageIds : [];
+    binder.pageIds = binder.pageIds.filter((id) => id !== noteId);
+    binder.pageIds.unshift(noteId);
+    binder.activePageId = noteId;
+
+    const note = this.nodes.get(noteId);
+    if (note) {
+      note.binderId = binderId;
+      if (binder.uniformColor) {
+        note.color = binder.uniformColor;
+      }
+    }
+    this.saveLayout();
+    return binder;
+  }
+
+  binderRemovePage(binderId, noteId, x, y) {
+    const binder = this.nodes.get(binderId);
+    if (!binder || binder.type !== "binder") return { removed: false, binder: null };
+    binder.pageIds = (binder.pageIds || []).filter((id) => id !== noteId);
+
+    const note = this.nodes.get(noteId);
+    if (note) {
+      note.binderId = null;
+      if (typeof x === "number" && typeof y === "number") {
+        note.x = x;
+        note.y = y;
+      }
+    }
+
+    if (binder.activePageId === noteId) {
+      binder.activePageId = binder.pageIds[0] || "";
+    }
+
+    let removed = false;
+    if (binder.pageIds.length === 0 && !binder.named) {
+      this.removeNode(binderId);
+      removed = true;
+    } else {
+      this.saveLayout();
+    }
+    return { removed, binder: removed ? null : binder };
+  }
+
+  binderReorder(binderId, pageIds) {
+    const binder = this.nodes.get(binderId);
+    if (!binder || binder.type !== "binder") return null;
+    if (Array.isArray(pageIds)) {
+      binder.pageIds = [...pageIds];
+      if (!binder.pageIds.includes(binder.activePageId)) {
+        binder.activePageId = binder.pageIds[0] || "";
+      }
+      this.saveLayout();
+    }
+    return binder;
+  }
+
+  binderUniformColor(binderId, color) {
+    const binder = this.nodes.get(binderId);
+    if (!binder || binder.type !== "binder") return null;
+    binder.uniformColor = color || null;
+    if (Array.isArray(binder.pageIds)) {
+      for (const pid of binder.pageIds) {
+        const pageNode = this.nodes.get(pid);
+        if (pageNode && color) {
+          pageNode.color = color;
+        }
+      }
+    }
+    this.saveLayout();
+    return binder;
+  }
+
+  binderRead(binderId) {
+    const binder = this.nodes.get(binderId);
+    if (!binder || binder.type !== "binder") return "";
+    const chunks = [];
+    for (const pid of binder.pageIds || []) {
+      const pageNode = this.nodes.get(pid);
+      const title = pageNode ? (pageNode.title || "Nota") : "Nota";
+      const content = this.noteRead(pid);
+      chunks.push(`## ${title}\n\n${content}`);
+    }
+    return chunks.join("\n\n---\n\n");
   }
 
   listNodes() {
@@ -791,8 +1066,28 @@ export class TerminalManager {
     if (this.nodes.has(id)) {
       const node = this.nodes.get(id);
       if (node.workspaceId === this.activeWorkspaceId) {
-        if (node.type === "note") {
+        if (node.type === "note" && node.internal !== false) {
           noteFileToDelete = node.filePath || (this.noteStore ? this.noteStore.internalFile(this.activeWorkspaceId, id) : null);
+        }
+        if (node.type === "note" && node.binderId) {
+          const parentBinder = this.nodes.get(node.binderId);
+          if (parentBinder && parentBinder.type === "binder") {
+            parentBinder.pageIds = (parentBinder.pageIds || []).filter((p) => p !== id);
+            if (parentBinder.activePageId === id) {
+              parentBinder.activePageId = parentBinder.pageIds[0] || "";
+            }
+            if (parentBinder.pageIds.length === 0 && !parentBinder.named) {
+              this.nodes.delete(node.binderId);
+              const ws = this.currentWorkspace();
+              if (ws) ws.nodes = (ws.nodes || []).filter((n) => n.id !== node.binderId);
+            }
+          }
+        }
+        if (node.type === "binder") {
+          for (const pid of node.pageIds || []) {
+            const childNote = this.nodes.get(pid);
+            if (childNote) childNote.binderId = null;
+          }
         }
         this.nodes.delete(id);
         removed = true;
@@ -857,6 +1152,7 @@ export class TerminalManager {
       if (!node) return { t: "unknown" };
       const type = node.type;
       if (type === "note") return { t: "note" };
+      if (type === "binder") return { t: "binder" };
       if (type === "web-portal" || type === "device-portal") return { t: "portal" };
       return { t: "other", type };
     };
@@ -865,8 +1161,8 @@ export class TerminalManager {
     const agentA = a.t === "terminal" && a.agent;
     const agentB = b.t === "terminal" && b.agent;
     if (agentA && agentB) return "agent-agent";
-    if (agentA && b.t === "note") return "agent-note";
-    if (agentB && a.t === "note") return "agent-note";
+    if (agentA && (b.t === "note" || b.t === "binder")) return "agent-note";
+    if (agentB && (a.t === "note" || a.t === "binder")) return "agent-note";
     if (agentA && b.t === "portal") return "agent-portal";
     if (agentB && a.t === "portal") return "agent-portal";
     return "node";

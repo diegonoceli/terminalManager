@@ -260,6 +260,13 @@ function handleMessage(msg) {
       if (!msg.ok) toast("Não foi possível mover a nota (diretório do workspace não definido).");
       break;
     }
+    case "note_image_saved": {
+      const w = app.widgets.get(msg.nodeId);
+      if (w && typeof w.insertImageMarkdown === "function") {
+        w.insertImageMarkdown(msg.relativePath || msg.fullPath);
+      }
+      break;
+    }
     case "fs_dir_result": {
       const w = app.widgets.get(msg.nodeId);
       if (w && typeof w.onDirResult === "function") {
@@ -511,9 +518,48 @@ app.sendUpdateNode = (id, config) => send({ type: "update_node", id, config });
 app.sendOpenVSCode = (path) => send({ type: "open_vscode", path });
 app.send = send;
 
-// Prevent Electron from opening dropped files in the window
-window.addEventListener("dragover", (e) => e.preventDefault(), false);
-window.addEventListener("drop", (e) => e.preventDefault(), false);
+// Drag & Drop de arquivos do Finder no canvas (US3 / T012)
+window.addEventListener("dragover", (e) => {
+  e.preventDefault();
+  if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+}, false);
+window.addEventListener("drop", (e) => {
+  e.preventDefault();
+  const files = e.dataTransfer?.files;
+  if (!files || files.length === 0) return;
+
+  const validExts = [".md", ".markdown", ".txt"];
+  let offset = 0;
+  for (const file of files) {
+    const name = file.name || "";
+    const lowerName = name.toLowerCase();
+    const hasValidExt = validExts.some((ext) => lowerName.endsWith(ext));
+    if (!hasValidExt) continue;
+
+    const filePath = file.path;
+    if (!filePath) continue;
+
+    const baseName = name.replace(/\.(md|markdown|txt)$/i, "") || "Nota";
+    const worldPt = app.canvas ? app.canvas.screenToWorld(e.clientX + offset, e.clientY + offset) : { x: e.clientX, y: e.clientY };
+    offset += 24;
+
+    send({
+      type: "create_node",
+      node: {
+        type: "note",
+        title: baseName,
+        filePath,
+        internal: false,
+        pinned: true,
+        view: "rendered",
+        x: Math.round(worldPt.x),
+        y: Math.round(worldPt.y),
+        width: 380,
+        height: 320,
+      },
+    });
+  }
+}, false);
 
 app.closeAllSettings = () => {
   for (const w of app.widgets.values()) {
@@ -1213,6 +1259,29 @@ document.getElementById("btn-agents")?.addEventListener("click", () => {
   if (window.Settings) Settings.openRolesManager();
 });
 
+// Abrir pasta de trabalho no Editor (US2)
+document.getElementById("btn-open-editor")?.addEventListener("click", () => {
+  const curWs = (app.workspaces || []).find((w) => w.id === app.activeWorkspaceId);
+  if (curWs && curWs.workingDir && !curWs.dirMissing) {
+    send({ type: "open_vscode", path: curWs.workingDir });
+  } else {
+    // Fallback: seletor nativo de diretório se workspace não tiver pasta configurada
+    if (window.WorkspaceSidebar && curWs) {
+      window.WorkspaceSidebar._dirCallback = (chosenPath) => {
+        if (chosenPath) {
+          curWs.workingDir = chosenPath;
+          curWs.dirMissing = false;
+          send({ type: "workspace_set_dir", workspaceId: curWs.id, workingDir: chosenPath });
+          send({ type: "open_vscode", path: chosenPath });
+        }
+      };
+      send({ type: "dir_pick" });
+    } else {
+      send({ type: "dir_pick" });
+    }
+  }
+});
+
 // Workflows / Workspaces listeners (legado até remoção do seletor de floors)
 if (floorSelect) {
   floorSelect.addEventListener("change", () => {
@@ -1311,6 +1380,19 @@ function applyThemeToActive(style, label) {
 window.addEventListener("keydown", (e) => {
   const mod = e.metaKey || e.ctrlKey;
   if (e.repeat && e.key === "Control") return;
+
+  // Atalho ⌘W / Ctrl+W para fechar nota ou fichário selecionado (US3 / T013)
+  if (mod && !e.shiftKey && e.key.toLowerCase() === "w") {
+    if (app.activeId) {
+      const activeWidget = app.widgets.get(app.activeId);
+      if (activeWidget && (activeWidget.type === "note" || activeWidget.type === "binder")) {
+        e.preventDefault();
+        app.removeNode(app.activeId);
+        return;
+      }
+    }
+  }
+
   if (!isTyping(e)) {
     if (mod && !e.shiftKey && e.key.toLowerCase() === "p") { e.preventDefault(); openSearch(); return; }
     if (mod && e.shiftKey && e.key.toLowerCase() === "g") { e.preventDefault(); dissolveSelected(); return; }

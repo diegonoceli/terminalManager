@@ -153,6 +153,24 @@ html, body {
   font-size: 12px;
   color: var(--muted);
 }
+.editor-btn {
+  font-size: 11.5px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--button-bg, rgba(255, 255, 255, 0.06));
+  color: var(--fg, #e6e6e6);
+  border: 1px solid var(--panel-border, rgba(255, 255, 255, 0.1));
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.editor-btn:hover {
+  background: var(--titlebar, rgba(255, 255, 255, 0.12));
+  border-color: var(--accent, #6366f1);
+}
 .status .dot {
   width: 9px; height: 9px;
   border-radius: 50%;
@@ -1248,6 +1266,97 @@ body.sb-mini .sb-num {
 .ctx-item { padding: 7px 10px; font-size: 13px; border-radius: 6px; cursor: pointer; }
 .ctx-item:hover { background: var(--titlebar); }
 .ctx-item.danger { color: var(--danger); }
+
+/* Mini Sidebar Tooltip & Long-press Terminals Popover (US1) */
+.sb-tooltip {
+  position: fixed;
+  z-index: 500;
+  pointer-events: none;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  transition: opacity 0.15s ease;
+}
+.sb-tooltip-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.sb-tooltip-dir {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sb-terminals-popover {
+  position: fixed;
+  z-index: 500;
+  min-width: 210px;
+  max-width: 320px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  padding: 6px;
+  animation: popoverFadeIn 0.15s ease-out;
+}
+@keyframes popoverFadeIn {
+  from { opacity: 0; transform: scale(0.96) translateX(-4px); }
+  to { opacity: 1; transform: scale(1) translateX(0); }
+}
+.sb-popover-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  padding: 4px 8px 6px;
+  border-bottom: 1px solid var(--panel-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sb-popover-list {
+  max-height: 240px;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+.sb-popover-item {
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.sb-popover-item:hover {
+  background: var(--titlebar);
+}
+.sb-popover-item .term-icon {
+  font-size: 13px;
+  opacity: 0.85;
+}
+.sb-popover-item .term-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sb-popover-empty {
+  padding: 10px 8px;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  font-style: italic;
+}
 .hidden { display: none !important; }
 
 /* Modal root/overlay */
@@ -1379,7 +1488,222 @@ details.field summary { cursor: pointer; font-weight: 600; color: var(--muted); 
 .note-rendered pre { background: #f4f4f1; padding: 8px; border-radius: 6px; overflow: auto; }
 .note-rendered code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
 
-/* ---------- File Tree Widget (US5) ---------- */
+/* ---------- Fichário / Binder Widget (US4) ---------- */
+.binder-widget {
+  min-height: 280px;
+  min-width: 360px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  box-shadow: var(--shadow);
+  transition: outline 0.15s ease;
+}
+.binder-widget.drag-over-binder {
+  outline: 2px dashed var(--accent, #6366f1);
+  outline-offset: -2px;
+}
+.binder-header {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  background: #f1f1ee;
+  border-bottom: 1px solid var(--panel-border);
+  border-radius: var(--radius) var(--radius) 0 0;
+  cursor: grab;
+  flex: none;
+  border-top: 3px solid var(--binder-color, var(--accent, #6366f1));
+}
+.binder-header .portal-icon { font-size: 14px; }
+.binder-header .portal-title {
+  flex: 1;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.binder-header .portal-actions { display: flex; gap: 2px; }
+.binder-header .portal-btn {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  height: 22px;
+  min-width: 22px;
+  padding: 0 5px;
+  border-radius: 5px;
+  font-size: 12px;
+  cursor: pointer;
+  line-height: 1;
+}
+.binder-header .portal-btn:hover { background: rgba(0, 0, 0, 0.06); color: var(--text); }
+.binder-layout {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+.binder-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  background: #fff;
+}
+.binder-page-bar {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  background: #fafaf8;
+  border-bottom: 1px solid var(--panel-border);
+  font-size: 11.5px;
+  color: var(--muted);
+  flex: none;
+}
+.binder-page-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.binder-page-body {
+  flex: 1;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+}
+.binder-textarea {
+  flex: 1;
+  border: none;
+  resize: none;
+  outline: none;
+  padding: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+  background: #fff;
+  color: var(--text);
+}
+.binder-rendered {
+  flex: 1;
+  overflow: auto;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.55;
+  background: #fff;
+  color: var(--text);
+}
+.binder-rendered h1, .binder-rendered h2, .binder-rendered h3 { margin: 0.5em 0 0.25em; }
+.binder-rendered img { max-width: 100%; border-radius: 6px; }
+.binder-rendered pre { background: #f4f4f1; padding: 8px; border-radius: 6px; overflow: auto; }
+.binder-rendered code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+
+.binder-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  color: var(--muted);
+  text-align: center;
+}
+.binder-empty-icon { font-size: 32px; margin-bottom: 8px; opacity: 0.65; }
+.binder-empty-text { font-size: 13px; font-weight: 600; }
+.binder-empty-sub { font-size: 11.5px; opacity: 0.75; margin-top: 4px; }
+
+.binder-tabs-rail {
+  width: 120px;
+  flex: none;
+  background: #f3f3f0;
+  border-left: 1px solid var(--panel-border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 6px 4px 6px 0;
+}
+.binder-tabs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+}
+.binder-tab-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 6px 0 0 6px;
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+  border-right: none;
+  background: #e8e8e4;
+  color: var(--muted);
+  user-select: none;
+  position: relative;
+}
+.binder-tab-item:hover {
+  background: #dfdfd8;
+  color: var(--text);
+}
+.binder-tab-item.active {
+  background: #fff;
+  color: var(--text);
+  font-weight: 600;
+  border-color: var(--panel-border);
+  box-shadow: -2px 0 6px rgba(0, 0, 0, 0.05);
+  z-index: 2;
+}
+.binder-tab-item.tab-dragging {
+  opacity: 0.35;
+}
+.tab-color-pip {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}
+.tab-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.binder-tab-ghost {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--panel);
+  color: var(--fg);
+  border: 1px solid var(--accent, #6366f1);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  transform: translate(-50%, -50%);
+  transition: background 0.15s ease;
+}
+.binder-tab-ghost.ghost-extract {
+  background: var(--accent, #6366f1);
+  color: #fff;
+  border-color: #fff;
+}
 .filetree-widget { min-width: 280px; min-height: 240px; }
 .ft-header { justify-content: flex-start; }
 .ft-actions { display: flex; gap: 2px; margin-left: auto; align-items: center; }

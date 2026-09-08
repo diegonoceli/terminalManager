@@ -26,6 +26,14 @@
       this._ctx = document.createElement("div");
       this._ctx.className = "ctx-menu hidden";
       document.body.appendChild(this._ctx);
+
+      this._tooltip = document.createElement("div");
+      this._tooltip.className = "sb-tooltip hidden";
+      document.body.appendChild(this._tooltip);
+
+      this._popover = document.createElement("div");
+      this._popover.className = "sb-terminals-popover hidden";
+      document.body.appendChild(this._popover);
     },
 
     render(workspaces, activeId) {
@@ -198,10 +206,70 @@
         this._reorderWorkspaces(fromId, toId, e.clientY < rect.top + rect.height / 2 ? "before" : "after");
       });
 
-      row.addEventListener("click", () => this.switchTo(w.id));
+      // Hover tooltip prolongado (>200ms) no modo mini
+      row.addEventListener("pointerenter", () => {
+        if (this.isMini()) {
+          this._hoverTimer = setTimeout(() => this._showTooltip(w, row), 200);
+        }
+      });
+      row.addEventListener("pointerleave", () => {
+        this._hideTooltip();
+        if (this._longPressTimer) {
+          clearTimeout(this._longPressTimer);
+          this._longPressTimer = null;
+        }
+      });
+
+      // Long-press (~400ms) para ver terminais sem conflito com drag (>6px cancela)
+      row.addEventListener("pointerdown", (e) => {
+        if (e.button !== 0) return;
+        this._pressStartX = e.clientX;
+        this._pressStartY = e.clientY;
+        this._longPressFired = false;
+        clearTimeout(this._longPressTimer);
+        this._longPressTimer = setTimeout(() => {
+          this._longPressFired = true;
+          this._showTerminalsPopover(w, row);
+        }, 400);
+      });
+
+      row.addEventListener("pointermove", (e) => {
+        if (this._longPressTimer) {
+          const dx = Math.abs(e.clientX - (this._pressStartX || e.clientX));
+          const dy = Math.abs(e.clientY - (this._pressStartY || e.clientY));
+          if (Math.hypot(dx, dy) > 6) {
+            clearTimeout(this._longPressTimer);
+            this._longPressTimer = null;
+          }
+        }
+      });
+
+      row.addEventListener("pointerup", (e) => {
+        if (this._longPressTimer) {
+          clearTimeout(this._longPressTimer);
+          this._longPressTimer = null;
+        }
+      });
+
+      row.addEventListener("click", (e) => {
+        if (this._longPressFired) {
+          e.preventDefault();
+          e.stopPropagation();
+          setTimeout(() => { this._longPressFired = false; }, 100);
+          return;
+        }
+        this.switchTo(w.id);
+      });
+
       row.addEventListener("contextmenu", (e) => {
         e.preventDefault();
         e.stopPropagation();
+        if (this._longPressTimer) {
+          clearTimeout(this._longPressTimer);
+          this._longPressTimer = null;
+        }
+        this._hideTooltip();
+        this._hideTerminalsPopover();
         this._openCtx(e.clientX, e.clientY, w);
       });
       return row;
@@ -276,12 +344,115 @@
       });
     },
 
-    toggleCollapse() {
-      const collapsed = !(this.app.ui.sidebar && this.app.ui.sidebar.collapsed);
-      if (this.app) this.app.ui.sidebar = { collapsed };
-      if (this.send) this.send({ type: "sidebar_collapse", collapsed });
-      document.body.classList.toggle("sb-mini", collapsed);
+    isMini() {
+      return document.body.classList.contains("sb-mini") || (this.el && this.el.classList.contains("is-mini"));
+    },
+
+    toggleMiniMode(enable) {
+      const current = this.isMini();
+      const target = typeof enable === "boolean" ? enable : !current;
+      if (this.app) {
+        if (!this.app.ui) this.app.ui = {};
+        this.app.ui.sidebar = { ...(this.app.ui.sidebar || {}), collapsed: target };
+      }
+      if (this.send) this.send({ type: "sidebar_collapse", collapsed: target });
+      document.body.classList.toggle("sb-mini", target);
       this.render(this.workspaces, this.activeId);
+    },
+
+    toggleCollapse() {
+      this.toggleMiniMode();
+    },
+
+    _showTooltip(w, row) {
+      if (!this.isMini() || !this._tooltip) return;
+      const rect = row.getBoundingClientRect();
+      this._tooltip.innerHTML = `
+        <div class="sb-tooltip-title">${w.name || "Workspace"}</div>
+        <div class="sb-tooltip-dir">${w.workingDir || "sem diretório"}</div>
+      `;
+      this._tooltip.classList.remove("hidden");
+      this._tooltip.style.left = `${rect.right + 8}px`;
+      const tipH = this._tooltip.offsetHeight || 36;
+      this._tooltip.style.top = `${Math.max(8, rect.top + rect.height / 2 - tipH / 2)}px`;
+    },
+
+    _hideTooltip() {
+      if (this._hoverTimer) {
+        clearTimeout(this._hoverTimer);
+        this._hoverTimer = null;
+      }
+      if (this._tooltip) {
+        this._tooltip.classList.add("hidden");
+      }
+    },
+
+    _showTerminalsPopover(w, row) {
+      if (!this._popover) return;
+      this._hideTooltip();
+      const rect = row.getBoundingClientRect();
+      const terminals = Array.isArray(w.terminals) ? w.terminals : [];
+
+      let listHtml = "";
+      if (terminals.length === 0) {
+        listHtml = `<div class="sb-popover-empty">Nenhum terminal ativo</div>`;
+      } else {
+        listHtml = terminals.map((t) => `
+          <div class="sb-popover-item" data-term-id="${t.id}">
+            <span class="term-icon">${t.icon || "▦"}</span>
+            <span class="term-title">${t.title || "Terminal"}</span>
+          </div>
+        `).join("");
+      }
+
+      this._popover.innerHTML = `
+        <div class="sb-popover-header">
+          <span>${w.name || "Workspace"} (${terminals.length})</span>
+        </div>
+        <div class="sb-popover-list">${listHtml}</div>
+      `;
+
+      this._popover.querySelectorAll(".sb-popover-item").forEach((item) => {
+        item.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const termId = item.dataset.termId;
+          this._hideTerminalsPopover();
+          if (w.id !== this.activeId) {
+            this.switchTo(w.id);
+            setTimeout(() => {
+              if (this.app?.focusNode) this.app.focusNode(termId);
+              else if (this.app?.motion?.focusNode) this.app.motion.focusNode(termId);
+            }, 120);
+          } else {
+            if (this.app?.focusNode) this.app.focusNode(termId);
+            else if (this.app?.motion?.focusNode) this.app.motion.focusNode(termId);
+          }
+        });
+      });
+
+      this._popover.classList.remove("hidden");
+      this._popover.style.left = `${rect.right + 8}px`;
+      const popH = this._popover.offsetHeight || 120;
+      const top = Math.min(window.innerHeight - popH - 12, Math.max(8, rect.top));
+      this._popover.style.top = `${top}px`;
+
+      const closePopover = (e) => {
+        if (!this._popover.contains(e.target) && !row.contains(e.target)) {
+          this._hideTerminalsPopover();
+          document.removeEventListener("pointerdown", closePopover);
+        }
+      };
+      setTimeout(() => document.addEventListener("pointerdown", closePopover), 50);
+    },
+
+    _hideTerminalsPopover() {
+      if (this._longPressTimer) {
+        clearTimeout(this._longPressTimer);
+        this._longPressTimer = null;
+      }
+      if (this._popover) {
+        this._popover.classList.add("hidden");
+      }
     },
 
     onDirPicked(path) {

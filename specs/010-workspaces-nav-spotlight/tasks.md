@@ -9,7 +9,7 @@
 
 **Purpose**: Verificação das estruturas base e preparação do ambiente
 
-- [ ] T001 Validar ambiente de execução e sintaxe dos arquivos base (`public/js/workspace-sidebar.js`, `public/js/notes.js`, `public/styles.css`, `electron/terminal-manager.js`)
+- [X] T001 Validar ambiente de execução e sintaxe dos arquivos base (`public/js/workspace-sidebar.js`, `public/js/notes.js`, `public/styles.css`, `electron/terminal-manager.js`)
 
 ---
 
@@ -19,8 +19,8 @@
 
 **⚠️ CRITICAL**: A persistência de pastas, grupos e fichários no backend é necessária para todas as histórias de organização espacial
 
-- [ ] T002 Atualizar modelo do `state.json` e serialização em `electron/terminal-manager.js` para suportar `folders`, `groups` e nós do tipo `binder`
-- [ ] T003 [P] Registrar handlers IPC base para fichários (`binder_create`, `binder_add_page`, etc.) e pastas/grupos em `electron/main.js`
+- [X] T002 Atualizar modelo do `state.json` e serialização em `electron/terminal-manager.js` para suportar `folders`, `groups` e nós do tipo `binder`
+- [X] T003 [P] Registrar handlers IPC base para fichários (`binder_create`, `binder_add_page`, etc.) e pastas/grupos em `electron/main.js`
 
 **Checkpoint**: Backend preparado para manipular novos tipos de nós e estruturas organizacionais
 
@@ -34,10 +34,10 @@
 
 ### Implementation for User Story 1
 
-- [ ] T004 [US1] Implementar modo mini da barra lateral em `public/js/workspace-sidebar.js` com layout colapsado (~48px) e tooltips nativos/flutuantes no hover
-- [ ] T005 [US1] Implementar detecção de long-press (~400ms) no `pointerdown`/`pointermove`/`pointerup` sem colisão com drag-and-drop em `public/js/workspace-sidebar.js`
-- [ ] T006 [P] [US1] Criar container e estilização do popover flutuante de terminais em `public/styles.css` e vincular foco com clique no nó em `public/js/workspace-sidebar.js`
-- [ ] T007 [P] [US1] Assegurar ativação do menu de contexto completo no botão direito sobre o ícone na mini barra em `public/js/workspace-sidebar.js`
+- [X] T004 [US1] Implementar modo mini da barra lateral em `public/js/workspace-sidebar.js` com layout colapsado (~48px) e tooltips nativos/flutuantes no hover
+- [X] T005 [US1] Implementar detecção de long-press (~400ms) no `pointerdown`/`pointermove`/`pointerup` sem colisão com drag-and-drop em `public/js/workspace-sidebar.js`
+- [X] T006 [P] [US1] Criar container e estilização do popover flutuante de terminais em `public/styles.css` e vincular foco com clique no nó em `public/js/workspace-sidebar.js`
+- [X] T007 [P] [US1] Assegurar ativação do menu de contexto completo no botão direito sobre o ícone na mini barra em `public/js/workspace-sidebar.js`
 
 **Checkpoint**: Mini barra lateral 100% funcional com navegação rápida, tooltips e popover de terminais.
 
@@ -51,8 +51,8 @@
 
 ### Implementation for User Story 2
 
-- [ ] T008 [US2] Adicionar botão "Abrir no Editor" no cabeçalho superior direito (`#toolbar`) em `public/index.html` e estilizar em `public/styles.css`
-- [ ] T009 [US2] Implementar listener de clique do botão com disparo de `open_vscode` e fallback para `dir_pick` quando sem diretório em `public/js/main.js`
+- [X] T008 [US2] Adicionar botão "Abrir no Editor" no cabeçalho superior direito (`#toolbar`) em `public/index.html` e estilizar em `public/styles.css`
+- [X] T009 [US2] Implementar listener de clique do botão com disparo de `open_vscode` e fallback para `dir_pick` quando sem diretório em `public/js/main.js`
 
 **Checkpoint**: Botão de editor responsivo e integrado no topo da interface.
 
@@ -66,10 +66,10 @@
 
 ### Implementation for User Story 3
 
-- [ ] T010 [US3] Implementar listener de `paste` para colar imagens da área de transferência com salvamento local de assets e inserção de markdown em `public/js/notes.js` e `electron/main.js`
-- [ ] T011 [P] [US3] Aprimorar duplo-clique no cabeçalho da nota para renomeação estável e restauração automática pela primeira linha quando o campo for limpo em `public/js/notes.js`
-- [ ] T012 [P] [US3] Permitir arrastar e soltar arquivos `.md`, `.markdown` e `.txt` do macOS Finder direto para o canvas criando notas externas em `public/js/canvas.js` e `public/js/main.js`
-- [ ] T013 [US3] Implementar atalho global <kbd>⌘W</kbd> / <kbd>Ctrl+W</kbd> para fechar e remover a nota selecionada em `public/js/main.js`
+- [X] T010 [US3] Implementar listener de `paste` para colar imagens da área de transferência com salvamento local de assets e inserção de markdown em `public/js/notes.js` e `electron/main.js`
+- [X] T011 [P] [US3] Aprimorar duplo-clique no cabeçalho da nota para renomeação estável e restauração automática pela primeira linha quando o campo for limpo em `public/js/notes.js`
+- [X] T012 [P] [US3] Permitir arrastar e soltar arquivos `.md`, `.markdown` e `.txt` do macOS Finder direto para o canvas criando notas externas em `public/js/canvas.js` e `public/js/main.js`
+- [X] T013 [US3] Implementar atalho global <kbd>⌘W</kbd> / <kbd>Ctrl+W</kbd> para fechar e remover a nota selecionada em `public/js/main.js`
 
 **Checkpoint**: Notas ricas com imagens, integração Finder e edição fluida.
 

@@ -81,12 +81,16 @@ export function migrateState(raw) {
 
   if (raw.version >= 3) {
     // Já v3 — apenas garante defaults de seções novas.
+    const folders = Array.isArray(raw.folders) ? raw.folders : (Array.isArray(raw.ui?.folders) ? raw.ui.folders : []);
+    const groups = Array.isArray(raw.groups) ? raw.groups : (Array.isArray(raw.ui?.sections) ? raw.ui.sections : []);
     return {
       state: {
         version: 3,
         activeWorkspaceId: raw.activeWorkspaceId || (Array.isArray(raw.workspaces) && raw.workspaces[0]?.id) || "ws_default",
         workspaces: Array.isArray(raw.workspaces) ? raw.workspaces : [],
-        ui: { ...DEFAULT_UI, ...(raw.ui || {}) },
+        folders,
+        groups,
+        ui: { ...DEFAULT_UI, ...(raw.ui || {}), folders, sections: groups },
         settings: { ...DEFAULT_SETTINGS, ...(raw.settings || {}) },
         roles: Array.isArray(raw.roles) ? raw.roles : [],
       },
@@ -99,15 +103,21 @@ export function migrateState(raw) {
     ? migrateWorkflowsToWorkspaces(raw)
     : { workspaces: [toWorkspace(null, "Workspace 1")], activeWorkspaceId: "ws_default" };
 
+  const folders = Array.isArray(raw.folders) ? raw.folders : (Array.isArray(raw.ui?.folders) ? raw.ui.folders : []);
+  const groups = Array.isArray(raw.groups) ? raw.groups : (Array.isArray(raw.ui?.sections) ? raw.ui.sections : []);
+
   return {
     state: {
       version: 3,
       activeWorkspaceId,
       workspaces,
-      ui: { ...DEFAULT_UI, ...(raw.ui || {}) },
+      folders,
+      groups,
+      ui: { ...DEFAULT_UI, ...(raw.ui || {}), folders, sections: groups },
       settings: { ...DEFAULT_SETTINGS, ...(raw.settings || {}) },
       roles: Array.isArray(raw.roles) ? raw.roles : [],
     },
     migrated: hasLegacy,
   };
 }
+

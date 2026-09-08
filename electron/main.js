@@ -50,6 +50,8 @@ function broadcastLayout() {
     connections: manager.listConnections(),
     activeWorkspaceId: manager.activeWorkspaceId,
     workspaces: manager.listWorkspaces(),
+    folders: manager.listFolders(),
+    groups: manager.listGroups(),
     ui: manager.ui,
     settings: manager.settings,
     roles: manager.settings.roles || [],
@@ -163,9 +165,45 @@ function handleMessage(msg) {
       manager.sidebarFolder(msg.action, msg);
       broadcastLayout();
       break;
+    case "folder_create":
+      manager.createFolder({ name: msg.name });
+      broadcastLayout();
+      break;
+    case "folder_delete":
+      manager.deleteFolder(msg.folderId);
+      broadcastLayout();
+      break;
+    case "folder_toggle":
+      manager.toggleFolder(msg.folderId, msg.collapsed);
+      broadcastLayout();
+      break;
+    case "folders_save":
+      if (Array.isArray(msg.folders)) {
+        manager.folders = msg.folders;
+        if (manager.ui) manager.ui.folders = msg.folders;
+        manager.saveLayout();
+        broadcastLayout();
+      }
+      break;
     case "sidebar_section":
       manager.sidebarSection(msg.action, msg);
       broadcastLayout();
+      break;
+    case "group_create":
+      manager.createGroup({ name: msg.name, order: msg.order });
+      broadcastLayout();
+      break;
+    case "group_delete":
+      manager.deleteGroup(msg.groupId);
+      broadcastLayout();
+      break;
+    case "groups_save":
+      if (Array.isArray(msg.groups)) {
+        manager.groups = msg.groups;
+        if (manager.ui) manager.ui.sections = msg.groups;
+        manager.saveLayout();
+        broadcastLayout();
+      }
       break;
     case "sidebar_collapse":
       manager.updateUi({ sidebar: { ...(manager.ui.sidebar || {}), collapsed: !!msg.collapsed } });
@@ -324,6 +362,39 @@ function handleMessage(msg) {
     case "note_pinned":
       manager.noteSetPinned(msg.nodeId, !!msg.pinned);
       break;
+    case "note_save_image": {
+      const res = manager.noteSaveImage(msg.nodeId, msg.bufferBase64, msg.extension);
+      broadcast({ type: "note_image_saved", nodeId: msg.nodeId, relativePath: res.relativePath, fullPath: res.fullPath, ok: res.ok, error: res.error });
+      break;
+    }
+    case "binder_create": {
+      const b = manager.binderCreate(msg);
+      broadcastLayout();
+      broadcast({ type: "binder_created", node: b });
+      break;
+    }
+    case "binder_add_page": {
+      const b = manager.binderAddPage(msg.binderId, msg.noteId);
+      broadcastLayout();
+      broadcast({ type: "binder_updated", node: b });
+      break;
+    }
+    case "binder_remove_page": {
+      const res = manager.binderRemovePage(msg.binderId, msg.noteId, msg.x, msg.y);
+      broadcastLayout();
+      broadcast({ type: "binder_page_removed", ...res, noteId: msg.noteId });
+      break;
+    }
+    case "binder_reorder": {
+      const b = manager.binderReorder(msg.binderId, msg.pageIds);
+      broadcastLayout();
+      break;
+    }
+    case "binder_uniform_color": {
+      const b = manager.binderUniformColor(msg.binderId, msg.color);
+      broadcastLayout();
+      break;
+    }
     case "fs_read_dir": {
       const res = readDir(msg.path);
       broadcast({ type: "fs_dir_result", nodeId: msg.nodeId, path: msg.path, ...res });
