@@ -54,7 +54,9 @@
           .filter(Boolean);
         if (members.length === 0) continue;
         list.appendChild(this._label(f.name || "Pasta", f));
-        for (const w of members) list.appendChild(this._row(w));
+        if (!f.collapsed) {
+          for (const w of members) list.appendChild(this._row(w));
+        }
       }
 
       const rest = this.workspaces.filter((w) => !inFolder.has(w.id));
@@ -79,11 +81,22 @@
       title.className = "sb-title";
       title.textContent = collapsed ? "" : "Workspaces";
 
-      const addBtn = this._btn(collapsed ? "＋" : "＋", "Novo workspace");
+      const addBtn = this._btn(
+        window.Icons ? window.Icons.svg("plus", { size: 14 }) : "+",
+        "Novo workspace"
+      );
       addBtn.addEventListener("click", () => this.openModal());
-      const minBtn = this._btn(collapsed ? "»" : "«", collapsed ? "Expandir" : "Mini barra");
+
+      const minBtn = this._btn(
+        window.Icons ? window.Icons.svg(collapsed ? "panel-left-open" : "panel-left-close", { size: 14 }) : (collapsed ? "»" : "«"),
+        collapsed ? "Expandir" : "Mini barra"
+      );
       minBtn.addEventListener("click", () => this.toggleCollapse());
-      const numBtn = this._btn("#", "Números (atalho: Ctrl 2x)");
+
+      const numBtn = this._btn(
+        window.Icons ? window.Icons.svg("grid", { size: 13 }) : "#",
+        "Números de atalho (Ctrl)"
+      );
       numBtn.addEventListener("click", () => this.toggleNumbers());
 
       header.appendChild(title);
@@ -93,10 +106,33 @@
       return header;
     },
 
-    _label(text) {
+    _label(text, folder) {
       const l = document.createElement("div");
       l.className = "sb-group";
-      l.textContent = text;
+      const left = document.createElement("div");
+      left.className = "sb-group-left";
+      const ic = document.createElement("span");
+      ic.style.display = "inline-flex";
+      ic.style.alignItems = "center";
+      ic.style.marginRight = "4px";
+      ic.innerHTML = window.Icons ? window.Icons.svg(folder ? (folder.collapsed ? "folder" : "folder-open") : "layers", { size: 12 }) : "📁";
+      const txt = document.createElement("span");
+      txt.textContent = text;
+      left.append(ic, txt);
+      l.appendChild(left);
+
+      if (folder) {
+        const toggle = document.createElement("span");
+        toggle.className = "sb-group-toggle";
+        toggle.innerHTML = window.Icons ? window.Icons.svg(folder.collapsed ? "chevron-right" : "chevron-down", { size: 11 }) : (folder.collapsed ? "▶" : "▼");
+        l.appendChild(toggle);
+        l.addEventListener("click", (e) => {
+          e.stopPropagation();
+          folder.collapsed = !folder.collapsed;
+          this.render(this.workspaces, this.activeId);
+          if (this.send) this.send({ type: "folders_save", folders: (this.app?.ui?.folders) || [] });
+        });
+      }
       return l;
     },
 
@@ -107,12 +143,16 @@
 
       const icon = document.createElement("span");
       icon.className = "sb-icon";
-      icon.textContent = w.icon || "▦";
+      if (w.icon) {
+        icon.textContent = w.icon;
+      } else {
+        icon.innerHTML = window.Icons ? window.Icons.svg("terminal", { size: 14 }) : "▦";
+      }
 
       const name = document.createElement("span");
       name.className = "sb-name";
       name.textContent = w.name || "Workspace";
-      name.title = `${w.name || "Workspace"}\n${w.workingDir || "sem diretório"}`;
+      row.title = `${w.name || "Workspace"}\n${w.workingDir || "sem diretório"}`;
 
       const num = document.createElement("span");
       num.className = "sb-num hidden";
@@ -120,6 +160,43 @@
       row.appendChild(icon);
       row.appendChild(name);
       row.appendChild(num);
+
+      // Drag and Drop reordering (T014 / FR-005)
+      row.draggable = true;
+      row.addEventListener("dragstart", (e) => {
+        this._draggedId = w.id;
+        row.classList.add("dragging");
+        e.dataTransfer.effectAllowed = "move";
+        try { e.dataTransfer.setData("text/plain", w.id); } catch {}
+      });
+      row.addEventListener("dragend", () => {
+        this._draggedId = null;
+        row.classList.remove("dragging");
+        if (this.el) {
+          this.el.querySelectorAll(".sb-row").forEach((r) => r.classList.remove("drag-over-top", "drag-over-bottom", "drag-over-folder"));
+        }
+      });
+      row.addEventListener("dragover", (e) => {
+        if (!this._draggedId || this._draggedId === w.id) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        const rect = row.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        row.classList.toggle("drag-over-top", e.clientY < midY);
+        row.classList.toggle("drag-over-bottom", e.clientY >= midY);
+      });
+      row.addEventListener("dragleave", () => {
+        row.classList.remove("drag-over-top", "drag-over-bottom");
+      });
+      row.addEventListener("drop", (e) => {
+        e.preventDefault();
+        const fromId = this._draggedId;
+        const toId = w.id;
+        row.classList.remove("drag-over-top", "drag-over-bottom");
+        if (!fromId || fromId === toId) return;
+        const rect = row.getBoundingClientRect();
+        this._reorderWorkspaces(fromId, toId, e.clientY < rect.top + rect.height / 2 ? "before" : "after");
+      });
 
       row.addEventListener("click", () => this.switchTo(w.id));
       row.addEventListener("contextmenu", (e) => {
@@ -130,11 +207,25 @@
       return row;
     },
 
-    _btn(text, title) {
+    _reorderWorkspaces(fromId, toId, position) {
+      const fromIdx = this.workspaces.findIndex((w) => w.id === fromId);
+      const toIdx = this.workspaces.findIndex((w) => w.id === toId);
+      if (fromIdx < 0 || toIdx < 0) return;
+      const item = this.workspaces.splice(fromIdx, 1)[0];
+      const targetIdx = this.workspaces.findIndex((w) => w.id === toId);
+      const insertAt = position === "before" ? targetIdx : targetIdx + 1;
+      this.workspaces.splice(insertAt, 0, item);
+      this.render(this.workspaces, this.activeId);
+      if (this.send) {
+        this.send({ type: "workspaces_reorder", order: this.workspaces.map((w) => w.id) });
+      }
+    },
+
+    _btn(content, title) {
       const b = document.createElement("button");
       b.className = "sb-btn";
       b.type = "button";
-      b.textContent = text;
+      b.innerHTML = content;
       b.title = title;
       return b;
     },
@@ -175,7 +266,7 @@
 
     _applyNumbers() {
       const rows = this.el ? [...this.el.querySelectorAll(".sb-row")] : [];
-      const visible = this.numberMode && !document.body.classList.contains("sb-mini");
+      const visible = this.numberMode;
       rows.forEach((row, i) => {
         const num = row.querySelector(".sb-num");
         if (num) {

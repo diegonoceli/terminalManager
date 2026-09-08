@@ -38,16 +38,16 @@ class FileTreeWidget extends BasePortalWidget {
 
     el.innerHTML = `
       <div class="portal-header note-header ft-header">
-        <div class="portal-icon">🗂</div>
+        <div class="portal-icon">${window.Icons ? window.Icons.svg("file-tree", { size: 14 }) : "🗂"}</div>
         <div class="portal-title">${this.title}</div>
         <div class="ft-actions">
-          <button class="ft-btn ft-list" title="Lista">☰</button>
-          <button class="ft-btn ft-grid" title="Grade de ícones">▦</button>
-          <button class="ft-btn ft-diff" title="Diff (uncommitted)">±</button>
-          <button class="ft-btn ft-graph" title="Grafo de commits">⇄</button>
-          <button class="ft-btn ft-branch" title="Menu Git">⎇</button>
-          <button class="ft-btn ft-reload" title="Recarregar">↻</button>
-          <button class="portal-btn btn-close" title="Fechar">✕</button>
+          <button class="ft-btn ft-list icon-btn" title="Lista">${window.Icons ? window.Icons.svg("file-text", { size: 13 }) : "☰"}</button>
+          <button class="ft-btn ft-grid icon-btn" title="Grade de ícones">${window.Icons ? window.Icons.svg("grid", { size: 13 }) : "▦"}</button>
+          <button class="ft-btn ft-diff icon-btn" title="Diff (uncommitted)">${window.Icons ? window.Icons.svg("git-commit", { size: 13 }) : "±"}</button>
+          <button class="ft-btn ft-graph icon-btn" title="Grafo de commits">${window.Icons ? window.Icons.svg("git-merge", { size: 13 }) : "⇄"}</button>
+          <button class="ft-btn ft-branch icon-btn" title="Menu Git">${window.Icons ? window.Icons.svg("git-branch", { size: 13 }) : "⎇"}</button>
+          <button class="ft-btn ft-reload icon-btn" title="Recarregar">${window.Icons ? window.Icons.svg("refresh-cw", { size: 13 }) : "↻"}</button>
+          <button class="portal-btn btn-close icon-btn danger" title="Fechar">${window.Icons ? window.Icons.svg("close", { size: 13 }) : "✕"}</button>
         </div>
       </div>
       <div class="ft-pathbar" title="caminho atual"></div>
@@ -145,9 +145,14 @@ class FileTreeWidget extends BasePortalWidget {
     const row = document.createElement("div");
     row.className = "ft-row";
     const isDir = e.type === "dir" || e.up;
+    const isCode = /\.(js|ts|jsx|tsx|json|html|css|py|sh|c|cpp|rs|go|md)$/i.test(e.name);
+    const iconName = isDir ? "folder" : (isCode ? "file-code" : "file-text");
     const icon = document.createElement("span");
     icon.className = "ft-file-icon";
-    icon.textContent = isDir ? "📁" : "📄";
+    icon.style.display = "inline-flex";
+    icon.style.alignItems = "center";
+    icon.style.justifyContent = "center";
+    icon.innerHTML = window.Icons ? window.Icons.svg(iconName, { size: 14 }) : (isDir ? "📁" : "📄");
     const name = document.createElement("span");
     name.className = "ft-name";
     name.textContent = e.name;
@@ -182,13 +187,16 @@ class FileTreeWidget extends BasePortalWidget {
         else this.openFile(e.path);
       });
       if (e.type === "dir") {
-        tile.innerHTML = `<span class="ft-tile-ic">📁</span><span class="ft-tile-name">${e.name}</span>`;
+        const dirIcon = window.Icons ? window.Icons.svg("folder", { size: 22 }) : "📁";
+        tile.innerHTML = `<span class="ft-tile-ic" style="display:inline-flex;align-items:center;justify-content:center;">${dirIcon}</span><span class="ft-tile-name">${e.name}</span>`;
       } else {
         const isImg = /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i.test(e.name);
         if (isImg) {
           tile.innerHTML = `<img class="ft-thumb" src="file://${e.path}" /><span class="ft-tile-name">${e.name}</span>`;
         } else {
-          tile.innerHTML = `<span class="ft-tile-ic">📄</span><span class="ft-tile-name">${e.name}</span>`;
+          const isCode = /\.(js|ts|jsx|tsx|json|html|css|py|sh|c|cpp|rs|go|md)$/i.test(e.name);
+          const fileIcon = window.Icons ? window.Icons.svg(isCode ? "file-code" : "file-text", { size: 22 }) : "📄";
+          tile.innerHTML = `<span class="ft-tile-ic" style="display:inline-flex;align-items:center;justify-content:center;">${fileIcon}</span><span class="ft-tile-name">${e.name}</span>`;
         }
       }
       g.appendChild(tile);

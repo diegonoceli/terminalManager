@@ -61,14 +61,35 @@ class TermWidget {
     const titlebar = document.createElement("div");
     titlebar.className = "titlebar";
 
+    const termIcon = document.createElement("span");
+    termIcon.className = "term-icon";
+    termIcon.style.display = "inline-flex";
+    termIcon.style.alignItems = "center";
+    termIcon.style.marginRight = "6px";
+    termIcon.innerHTML = window.Icons ? window.Icons.svg("terminal", { size: 14 }) : ">_";
+    titlebar.appendChild(termIcon);
+
+    this.attentionDot = document.createElement("span");
+    this.attentionDot.className = "terminal-attention-pulse hidden";
+    this.attentionDot.title = "Atenção: agente aguarda entrada do usuário";
+    titlebar.appendChild(this.attentionDot);
+
+    this.spinnerEl = document.createElement("span");
+    this.spinnerEl.className = "terminal-spinner hidden";
+    this.spinnerEl.style.marginRight = "6px";
+    this.spinnerEl.style.display = "inline-flex";
+    this.spinnerEl.style.alignItems = "center";
+    this.spinnerEl.innerHTML = window.Icons ? window.Icons.svg("loader", { size: 13, className: "icon-spin" }) : "";
+    titlebar.appendChild(this.spinnerEl);
+
     this.titleEl = document.createElement("span");
     this.titleEl.className = "title";
     this.titleEl.textContent = this.titleText;
     titlebar.appendChild(this.titleEl);
 
     const renameBtn = document.createElement("button");
-    renameBtn.className = "tb-btn";
-    renameBtn.textContent = "✎";
+    renameBtn.className = "tb-btn icon-btn";
+    renameBtn.innerHTML = window.Icons ? window.Icons.svg("edit", { size: 13 }) : "✎";
     renameBtn.title = "Renomear";
     renameBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
     renameBtn.addEventListener("click", (e) => {
@@ -77,9 +98,32 @@ class TermWidget {
     });
     titlebar.appendChild(renameBtn);
 
+    const dupBtn = document.createElement("button");
+    dupBtn.className = "tb-btn icon-btn";
+    dupBtn.innerHTML = window.Icons ? window.Icons.svg("copy", { size: 13 }) : "⎘";
+    dupBtn.title = "Duplicar terminal";
+    dupBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+    dupBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (typeof duplicateWidget === "function") duplicateWidget(this.id);
+    });
+    titlebar.appendChild(dupBtn);
+
+    const focusBtn = document.createElement("button");
+    focusBtn.className = "tb-btn icon-btn";
+    focusBtn.innerHTML = window.Icons ? window.Icons.svg("crosshair", { size: 13 }) : "⌖";
+    focusBtn.title = "Centralizar e focar (Ctrl+\\)";
+    focusBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
+    focusBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (this.app?.motion?.focusNode) this.app.motion.focusNode(this.id);
+      this.focus();
+    });
+    titlebar.appendChild(focusBtn);
+
     const settingsBtn = document.createElement("button");
-    settingsBtn.className = "tb-btn";
-    settingsBtn.textContent = "⚙";
+    settingsBtn.className = "tb-btn icon-btn";
+    settingsBtn.innerHTML = window.Icons ? window.Icons.svg("settings", { size: 13 }) : "⚙";
     settingsBtn.title = "Configurações (fundo, cores, fonte)";
     settingsBtn.dataset.settingsFor = this.id;
     settingsBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
@@ -90,8 +134,8 @@ class TermWidget {
     titlebar.appendChild(settingsBtn);
 
     const delBtn = document.createElement("button");
-    delBtn.className = "tb-btn danger";
-    delBtn.textContent = "✕";
+    delBtn.className = "tb-btn icon-btn danger";
+    delBtn.innerHTML = window.Icons ? window.Icons.svg("close", { size: 13 }) : "✕";
     delBtn.title = "Fechar terminal";
     delBtn.addEventListener("pointerdown", (e) => e.stopPropagation());
     delBtn.addEventListener("click", (e) => {
@@ -121,6 +165,18 @@ class TermWidget {
     el.appendChild(portRight);
     el.appendChild(portLeft);
     return el;
+  }
+
+  setAttention(on) {
+    this.attention = !!on;
+    if (this.attentionDot) this.attentionDot.classList.toggle("hidden", !on);
+    if (this.el) this.el.classList.toggle("agent-attention", !!on);
+  }
+
+  setProcessing(on) {
+    this.processing = !!on;
+    if (this.spinnerEl) this.spinnerEl.classList.toggle("hidden", !on);
+    if (this.el) this.el.classList.toggle("agent-processing", !!on);
   }
 
   _setupTerm() {
@@ -770,6 +826,18 @@ class TermWidget {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       this.el.classList.remove("dragging");
+      if (this.el.classList.contains("node-elevated") && this.app?.motion) {
+        const sbW = document.body.classList.contains("sb-mini") ? 48 : 240;
+        if (ev.clientX <= sbW + 50) {
+          this.app.motion.toggleElevateNode(this.id);
+          this.app.motion.dockNode(this.id, "left");
+          return;
+        } else if (ev.clientX >= window.innerWidth - 60) {
+          this.app.motion.toggleElevateNode(this.id);
+          this.app.motion.dockNode(this.id, "right");
+          return;
+        }
+      }
       this.app.sendMove(this.id, this.worldPos.x, this.worldPos.y);
     };
 

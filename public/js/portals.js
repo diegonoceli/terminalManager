@@ -112,6 +112,18 @@ class BasePortalWidget {
       try {
         handle.releasePointerCapture(e.pointerId);
       } catch {}
+      if (this.el.classList.contains("node-elevated") && this.app?.motion) {
+        const sbW = document.body.classList.contains("sb-mini") ? 48 : 240;
+        if (e.clientX <= sbW + 50) {
+          this.app.motion.toggleElevateNode(this.id);
+          this.app.motion.dockNode(this.id, "left");
+          return;
+        } else if (e.clientX >= window.innerWidth - 60) {
+          this.app.motion.toggleElevateNode(this.id);
+          this.app.motion.dockNode(this.id, "right");
+          return;
+        }
+      }
     };
 
     handle.addEventListener("pointerup", stopDrag);
@@ -215,17 +227,17 @@ class WebPortalWidget extends BasePortalWidget {
 
     el.innerHTML = `
       <div class="portal-header">
-        <div class="portal-icon">🌐</div>
+        <div class="portal-icon">${window.Icons ? window.Icons.svg("web", { size: 14 }) : "🌐"}</div>
         <div class="portal-title">${this.title}</div>
         <div class="portal-browser-bar">
-          <button class="portal-btn btn-back" title="Voltar">‹</button>
-          <button class="portal-btn btn-fwd" title="Avançar">›</button>
-          <button class="portal-btn btn-reload" title="Recarregar">↻</button>
+          <button class="portal-btn btn-back icon-btn" title="Voltar">${window.Icons ? window.Icons.svg("chevron-left", { size: 13 }) : "‹"}</button>
+          <button class="portal-btn btn-fwd icon-btn" title="Avançar">${window.Icons ? window.Icons.svg("chevron-right", { size: 13 }) : "›"}</button>
+          <button class="portal-btn btn-reload icon-btn" title="Recarregar">${window.Icons ? window.Icons.svg("refresh-cw", { size: 13 }) : "↻"}</button>
           <input type="text" class="portal-url-input" value="${this.url}" spellcheck="false" placeholder="http://localhost:3000" />
-          <button class="portal-btn btn-external" title="Abrir no navegador externo">↗</button>
+          <button class="portal-btn btn-external icon-btn" title="Abrir no navegador externo">${window.Icons ? window.Icons.svg("external-link", { size: 13 }) : "↗"}</button>
         </div>
         <div class="portal-actions">
-          <button class="portal-btn btn-close" title="Fechar portal">✕</button>
+          <button class="portal-btn btn-close icon-btn danger" title="Fechar portal">${window.Icons ? window.Icons.svg("close", { size: 13 }) : "✕"}</button>
         </div>
       </div>
       <div class="portal-content">
@@ -424,14 +436,14 @@ class DevicePortalWidget extends BasePortalWidget {
 
     el.innerHTML = `
       <div class="device-header">
-        <div class="device-notch-icon">${isApple ? "📱" : "🤖"}</div>
+        <div class="device-notch-icon">${window.Icons ? window.Icons.svg("smartphone", { size: 14 }) : "📱"}</div>
         <div class="portal-title">${this.title}</div>
         <input type="text" class="device-url-input" value="${this.url}" spellcheck="false" placeholder="http://localhost:3000" title="URL da aplicação móvel" />
         <div class="device-status-badge ${this.status}">${this.status === "connected" ? "Online" : "Offline"}</div>
         <div class="portal-actions">
-          <button class="portal-btn btn-rotate" title="Alternar orientação (Retrato / Paisagem)">🔄</button>
-          <button class="portal-btn btn-reload" title="Recarregar tela">↻</button>
-          <button class="portal-btn btn-close" title="Fechar emulador">✕</button>
+          <button class="portal-btn btn-rotate icon-btn" title="Alternar orientação (Retrato / Paisagem)">${window.Icons ? window.Icons.svg("rotate", { size: 13 }) : "🔄"}</button>
+          <button class="portal-btn btn-reload icon-btn" title="Recarregar tela">${window.Icons ? window.Icons.svg("refresh-cw", { size: 13 }) : "↻"}</button>
+          <button class="portal-btn btn-close icon-btn danger" title="Fechar emulador">${window.Icons ? window.Icons.svg("close", { size: 13 }) : "✕"}</button>
         </div>
       </div>
       
@@ -633,10 +645,10 @@ class EditorWidget extends BasePortalWidget {
 
     el.innerHTML = `
       <div class="portal-header">
-        <div class="portal-icon">💻</div>
+        <div class="portal-icon">${window.Icons ? window.Icons.svg("code", { size: 14 }) : "💻"}</div>
         <div class="portal-title">${this.title}</div>
         <div class="portal-actions">
-          <button class="portal-btn btn-close" title="Fechar editor">✕</button>
+          <button class="portal-btn btn-close icon-btn danger" title="Fechar editor">${window.Icons ? window.Icons.svg("close", { size: 13 }) : "✕"}</button>
         </div>
       </div>
       
@@ -647,11 +659,11 @@ class EditorWidget extends BasePortalWidget {
         </div>
 
         <div class="editor-actions-list">
-          <button class="btn-vscode-open">
-            <span class="vscode-icon">⚡</span> Abrir no VS Code
+          <button class="btn-vscode-open btn" style="gap: 6px;">
+            <span class="vscode-icon" style="display:inline-flex;align-items:center;">${window.Icons ? window.Icons.svg("editor", { size: 14 }) : "⚡"}</span> Abrir no VS Code
           </button>
-          <button class="btn-folder-open">
-            <span>📁</span> Abrir Pasta Local
+          <button class="btn-folder-open btn" style="gap: 6px;">
+            <span style="display:inline-flex;align-items:center;">${window.Icons ? window.Icons.svg("folder-open", { size: 14 }) : "📁"}</span> Abrir Pasta Local
           </button>
         </div>
 

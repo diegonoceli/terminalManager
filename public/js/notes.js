@@ -32,13 +32,13 @@ class NoteWidget extends BasePortalWidget {
 
     el.innerHTML = `
       <div class="portal-header note-header">
-        <div class="portal-icon">📝</div>
+        <div class="portal-icon">${window.Icons ? window.Icons.svg("note", { size: 14 }) : "📝"}</div>
         <div class="portal-title">${this.title}</div>
         <div class="portal-actions">
-          <button class="portal-btn note-btn-view" title="Alternar Raw / Formatada">Md</button>
-          <button class="portal-btn note-btn-pin" title="Fixar nome (Renomear)">📌</button>
-          <button class="portal-btn note-btn-move" title="Mover para o projeto">📁</button>
-          <button class="portal-btn btn-close" title="Fechar nota">✕</button>
+          <button class="portal-btn note-btn-view icon-btn" title="Alternar Raw / Formatada">${window.Icons ? window.Icons.svg("file-text", { size: 13 }) : "Md"}</button>
+          <button class="portal-btn note-btn-pin icon-btn" title="Fixar nome (Renomear)">${window.Icons ? window.Icons.svg("edit", { size: 13 }) : "✎"}</button>
+          <button class="portal-btn note-btn-move icon-btn" title="Mover para o projeto">${window.Icons ? window.Icons.svg("folder", { size: 13 }) : "📁"}</button>
+          <button class="portal-btn btn-close icon-btn danger" title="Fechar nota">${window.Icons ? window.Icons.svg("close", { size: 13 }) : "✕"}</button>
         </div>
       </div>
       <div class="note-body">

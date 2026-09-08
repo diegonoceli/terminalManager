@@ -92,20 +92,35 @@ class Canvas {
 
   animateTo(target, opts = {}) {
     this._stopAnim();
-    const dur = opts.duration ?? 340;
-    const start = { tx: this.tx, ty: this.ty, zoom: this.zoom };
-    const t0 = performance.now();
-    const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
-    const step = (now) => {
-      const k = Math.min(1, (now - t0) / dur);
-      const e = ease(k);
-      this.tx = start.tx + (target.tx - start.tx) * e;
-      this.ty = start.ty + (target.ty - start.ty) * e;
-      this.zoom = start.zoom + (target.zoom - start.zoom) * e;
+    const reduced = window.app?.motion?.isReduced ? window.app.motion.isReduced() : false;
+    const dur = reduced ? 0 : (opts.duration ?? 300);
+    if (dur <= 0) {
+      if (target.tx !== undefined) this.tx = target.tx;
+      if (target.ty !== undefined) this.ty = target.ty;
+      if (target.zoom !== undefined) this.zoom = target.zoom;
       this.apply();
-      this._animId = k < 1 ? requestAnimationFrame(step) : null;
-    };
-    this._animId = requestAnimationFrame(step);
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      const start = { tx: this.tx, ty: this.ty, zoom: this.zoom };
+      const t0 = performance.now();
+      const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+      const step = (now) => {
+        const k = Math.min(1, (now - t0) / dur);
+        const e = ease(k);
+        if (target.tx !== undefined) this.tx = start.tx + (target.tx - start.tx) * e;
+        if (target.ty !== undefined) this.ty = start.ty + (target.ty - start.ty) * e;
+        if (target.zoom !== undefined) this.zoom = start.zoom + (target.zoom - start.zoom) * e;
+        this.apply();
+        if (k < 1) {
+          this._animId = requestAnimationFrame(step);
+        } else {
+          this._animId = null;
+          resolve();
+        }
+      };
+      this._animId = requestAnimationFrame(step);
+    });
   }
 
   _stopAnim() {

@@ -119,25 +119,76 @@ class ConnectionsManager {
     return { src, dst };
   }
 
-  _calculateBezier(src, dst) {
-    const dx = Math.max(40, Math.abs(dst.x - src.x) * 0.55);
-    const sign = src.x < dst.x ? 1 : -1;
-    const c1x = src.x + dx * sign;
-    const c1y = src.y;
-    const c2x = dst.x - dx * sign;
-    const c2y = dst.y;
+  _calculateRope(src, dst) {
+    const dx = Math.abs(dst.x - src.x);
+    const dy = Math.abs(dst.y - src.y);
+    const dist = Math.hypot(dx, dy);
+    // Flecha do arco (sag) com física de gravidade natural (T020 / FR-012)
+    const sag = Math.min(160, Math.max(20, dist * 0.18 + 12));
+    const span = Math.max(45, dx * 0.52);
+    const signX = src.x <= dst.x ? 1 : -1;
+    const c1x = src.x + span * signX;
+    const c1y = src.y + sag;
+    const c2x = dst.x - span * signX;
+    const c2y = dst.y + sag;
     return `M ${src.x} ${src.y} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${dst.x} ${dst.y}`;
   }
 
   _calculateCircuit(src, dst) {
-    // Trilhos alinhados aos eixos com curva de 90° (FR-038)
-    const mx = (src.x + dst.x) / 2;
-    const my = src.y;
-    return `M ${src.x} ${src.y} L ${mx} ${my} Q ${mx} ${(src.y + dst.y) / 2} ${mx} ${dst.y} L ${dst.x} ${dst.y}`;
+    // Trajetos ortogonais em ângulos retos de 90° com vértices suavemente arredondados (T021 / FR-013)
+    const dx = dst.x - src.x;
+    const dy = dst.y - src.y;
+    if (Math.abs(dy) < 4) {
+      return `M ${src.x} ${src.y} L ${dst.x} ${dst.y}`;
+    }
+    const mx = src.x + dx * 0.5;
+    const signX = dx >= 0 ? 1 : -1;
+    const signY = dy >= 0 ? 1 : -1;
+    const r = Math.min(14, Math.abs(dx) / 2, Math.abs(dy) / 2);
+
+    if (r < 2) {
+      return `M ${src.x} ${src.y} L ${mx} ${src.y} L ${mx} ${dst.y} L ${dst.x} ${dst.y}`;
+    }
+
+    const p1x = mx - r * signX;
+    const p1y = src.y;
+    const p2x = mx;
+    const p2y = src.y + r * signY;
+    const p3x = mx;
+    const p3y = dst.y - r * signY;
+    const p4x = mx + r * signX;
+    const p4y = dst.y;
+
+    return `M ${src.x} ${src.y} L ${p1x} ${p1y} Q ${mx} ${src.y} ${p2x} ${p2y} L ${p3x} ${p3y} Q ${mx} ${dst.y} ${p4x} ${p4y} L ${dst.x} ${dst.y}`;
   }
 
-  _pathFor(conn, src, dst) {
-    return conn && conn.style === "circuit" ? this._calculateCircuit(src, dst) : this._calculateBezier(src, dst);
+  _calculateBundle(src, dst, tie) {
+    // Convergência harmoniosa de cabos para abraçadeira (T022 / FR-014)
+    const c1x = (src.x + tie.x) / 2;
+    const c1y = src.y;
+    const c2x = (dst.x + tie.x) / 2;
+    const c2y = dst.y;
+    return `M ${src.x} ${src.y} Q ${c1x} ${c1y} ${tie.x} ${tie.y} Q ${c2x} ${c2y} ${dst.x} ${dst.y}`;
+  }
+
+  _pathFor(conn, src, dst, bundleTie) {
+    if (conn && conn.bundleId && bundleTie) {
+      return this._calculateBundle(src, dst, bundleTie);
+    }
+    return conn && conn.style === "circuit" ? this._calculateCircuit(src, dst) : this._calculateRope(src, dst);
+  }
+
+  /** Emite pulso luminoso de atividade ao longo do cabo por 2s (T023 / FR-015) */
+  triggerPulse(connId, duration = 2000) {
+    const g = this.svg.querySelector(`.connection-group[data-id="${connId}"]`);
+    if (!g) return;
+    const path = g.querySelector(".connection-path");
+    if (!path) return;
+    path.classList.add("conn-pulse");
+    clearTimeout(g._pulseTimer);
+    g._pulseTimer = setTimeout(() => {
+      path.classList.remove("conn-pulse");
+    }, duration);
   }
 
   redraw(id) {
@@ -157,7 +208,24 @@ class ConnectionsManager {
     g.style.display = "";
 
     const { src, dst } = this._getAnchorPoints(w1, w2);
-    const d = this._pathFor(conn, src, dst);
+
+    let bundleTie = null;
+    if (conn.bundleId) {
+      const members = [...this.connections.values()].filter((c) => c.bundleId === conn.bundleId);
+      const rep = members.length ? members.reduce((a, b) => (a.id < b.id ? a : b)) : conn;
+      if (rep.id !== conn.id) {
+        const repG = this.svg.querySelector(`.connection-group[data-id="${rep.id}"]`);
+        const tieEl = repG?.querySelector(".tie-bundle");
+        if (tieEl) {
+          bundleTie = {
+            x: parseFloat(tieEl.getAttribute("x")) + 7,
+            y: parseFloat(tieEl.getAttribute("y")) + 3.5
+          };
+        }
+      }
+    }
+
+    const d = this._pathFor(conn, src, dst, bundleTie);
 
     for (const p of g.querySelectorAll("path")) {
       p.setAttribute("d", d);

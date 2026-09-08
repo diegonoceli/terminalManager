@@ -40,8 +40,10 @@
           row.appendChild(badge);
           const hint = el("span", "role-desc", (role.instructions || "").slice(0, 60));
           row.appendChild(hint);
-          const edit = el("button", "btn small", "Editar");
-          const del = el("button", "btn small danger", "Excluir");
+          const edit = el("button", "btn small", "");
+          edit.innerHTML = (window.Icons ? window.Icons.svg("edit", { size: 12 }) : "") + " Editar";
+          const del = el("button", "btn small danger", "");
+          del.innerHTML = (window.Icons ? window.Icons.svg("trash", { size: 12 }) : "") + " Excluir";
           edit.addEventListener("click", () => form(role));
           del.addEventListener("click", () => {
             if (confirm(`Excluir a responsabilidade "${role.name}"?`)) {
@@ -107,10 +109,55 @@
         cancel.addEventListener("click", () => fwrap.remove());
       };
 
-      const addBtn = el("button", "btn primary", "＋ Nova responsabilidade");
+      const addBtn = el("button", "btn primary", "");
+      addBtn.innerHTML = (window.Icons ? window.Icons.svg("plus", { size: 13 }) : "+ ") + " Nova responsabilidade";
       addBtn.addEventListener("click", () => form(null));
       box.append(el("div", "role-head", "Responsabilidades disponíveis"), list, addBtn);
-      const close = el("button", "btn", "Fechar");
+
+      // Seção de Acessibilidade e Movimento (T027 / US6 / FR-020)
+      const motionSection = el("div", "settings-motion-section");
+      motionSection.style.margin = "16px 0";
+      motionSection.style.padding = "12px";
+      motionSection.style.background = "var(--titlebar)";
+      motionSection.style.borderRadius = "8px";
+      motionSection.style.border = "1px solid var(--panel-border)";
+
+      const motionTitle = el("div", "settings-motion-title", "Aparência e Movimento (Acessibilidade)");
+      motionTitle.style.fontWeight = "600";
+      motionTitle.style.fontSize = "13px";
+      motionTitle.style.marginBottom = "8px";
+
+      const motionLabel = document.createElement("label");
+      motionLabel.style.display = "flex";
+      motionLabel.style.alignItems = "center";
+      motionLabel.style.gap = "8px";
+      motionLabel.style.fontSize = "12.5px";
+      motionLabel.style.cursor = "pointer";
+
+      const motionCheckbox = document.createElement("input");
+      motionCheckbox.type = "checkbox";
+      const isCurrentlyReduced = this.app?.motion?.isReduced ? this.app.motion.isReduced() : false;
+      motionCheckbox.checked = isCurrentlyReduced;
+
+      motionCheckbox.addEventListener("change", () => {
+        const reduced = motionCheckbox.checked;
+        localStorage.setItem("reduced-motion", String(reduced));
+        document.body.classList.toggle("reduced-motion", reduced);
+        if (this.app) {
+          if (!this.app.ui) this.app.ui = {};
+          this.app.ui.reducedMotion = reduced;
+        }
+        if (window.toast) toast(reduced ? "Movimento reduzido ativado." : "Movimento reduzido desativado.");
+      });
+
+      const motionText = document.createElement("span");
+      motionText.textContent = "Reduzir Movimento (suprimir transições móveis, zoom e efeitos de inércia)";
+      motionLabel.append(motionCheckbox, motionText);
+      motionSection.append(motionTitle, motionLabel);
+      box.appendChild(motionSection);
+
+      const close = el("button", "btn", "");
+      close.innerHTML = (window.Icons ? window.Icons.svg("close", { size: 13 }) : "") + " Fechar";
       close.addEventListener("click", () => this.close());
       box.appendChild(close);
       overlay.appendChild(box);

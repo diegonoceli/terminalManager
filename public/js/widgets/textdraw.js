@@ -28,10 +28,10 @@ class TextWidget extends BasePortalWidget {
 
     el.innerHTML = `
       <div class="portal-header note-header">
-        <div class="portal-icon">🅃</div>
+        <div class="portal-icon">${window.Icons ? window.Icons.svg("text", { size: 14 }) : "T"}</div>
         <div class="portal-title">${this.title}</div>
         <div class="portal-actions">
-          <button class="portal-btn btn-close" title="Fechar">✕</button>
+          <button class="portal-btn btn-close icon-btn danger" title="Fechar">${window.Icons ? window.Icons.svg("close", { size: 13 }) : "✕"}</button>
         </div>
       </div>
       <div class="text-content" contenteditable="true" spellcheck="false"></div>
@@ -110,11 +110,11 @@ class DrawWidget extends BasePortalWidget {
 
     el.innerHTML = `
       <div class="portal-header note-header">
-        <div class="portal-icon">✎</div>
+        <div class="portal-icon">${window.Icons ? window.Icons.svg("draw", { size: 14 }) : "✎"}</div>
         <div class="portal-title">${this.title}</div>
         <div class="portal-actions draw-tools"></div>
         <div class="portal-actions">
-          <button class="portal-btn btn-close" title="Fechar">✕</button>
+          <button class="portal-btn btn-close icon-btn danger" title="Fechar">${window.Icons ? window.Icons.svg("close", { size: 13 }) : "✕"}</button>
         </div>
       </div>
       <div class="draw-canvas-wrap">

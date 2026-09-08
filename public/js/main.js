@@ -23,6 +23,70 @@ app.activeWorkspaceId = null;
 
 app.nodes = app.widgets; // Alias for universal nodes
 app.connections = new ConnectionsManager(app);
+window.app = app;
+
+app.motion = {
+  isReduced() {
+    const saved = localStorage.getItem("reduced-motion");
+    if (saved !== null) return saved === "true";
+    return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  },
+
+  animateCamera(target, duration = 300) {
+    return app.canvas.animateTo(target, { duration });
+  },
+
+  focusNode(nodeId) {
+    const node = app.widgets.get(nodeId);
+    if (!node) return Promise.resolve();
+    const rect = app.canvas.viewport.getBoundingClientRect();
+    const targetZoom = Math.min(1.2, Math.max(0.65, app.canvas.zoom));
+    const targetTx = rect.width / 2 - (node.worldPos.x + node.worldSize.w / 2) * targetZoom;
+    const targetTy = rect.height / 2 - (node.worldPos.y + node.worldSize.h / 2) * targetZoom;
+    return this.animateCamera({ tx: targetTx, ty: targetTy, zoom: targetZoom }, 300);
+  },
+
+  toggleElevateNode(nodeId) {
+    const node = app.widgets.get(nodeId);
+    if (!node || !node.el) return;
+    const isElevated = node.el.classList.contains("node-elevated");
+    let backdrop = document.querySelector(".node-elevation-backdrop");
+    if (isElevated) {
+      node.el.classList.remove("node-elevated");
+      if (backdrop) backdrop.remove();
+      node.elevated = false;
+    } else {
+      for (const w of app.widgets.values()) {
+        if (w.el && w.el.classList.contains("node-elevated")) {
+          w.el.classList.remove("node-elevated");
+          w.elevated = false;
+        }
+      }
+      if (!backdrop) {
+        backdrop = document.createElement("div");
+        backdrop.className = "node-elevation-backdrop";
+        backdrop.addEventListener("click", () => app.motion.toggleElevateNode(nodeId));
+        document.body.appendChild(backdrop);
+      }
+      node.el.classList.add("node-elevated");
+      node.elevated = true;
+      app.setActive(nodeId);
+    }
+  },
+
+  dockNode(nodeId, side = "none") {
+    const node = app.widgets.get(nodeId);
+    if (!node || !node.el) return;
+    node.el.classList.remove("node-docked-left", "node-docked-right");
+    node.docked = side;
+    if (side === "left") node.el.classList.add("node-docked-left");
+    else if (side === "right") node.el.classList.add("node-docked-right");
+  }
+};
+
+if (app.motion.isReduced()) {
+  document.body.classList.add("reduced-motion");
+}
 
 /* ---------------- Transporte: Electron IPC ou WebSocket (dev) ---------------- */
 const useBridge = !!window.appBridge;
@@ -314,6 +378,10 @@ function ensureNode(data, doFit) {
     }
     app.widgets.set(data.id, w);
     world.appendChild(w.el);
+    if (!app.motion.isReduced() && w.el) {
+      w.el.classList.add("node-entering");
+      setTimeout(() => w.el?.classList.remove("node-entering"), 300);
+    }
     w.setPosition(data.x, data.y);
     w.setSize(data.width, data.height);
   } else {
@@ -332,15 +400,25 @@ function ensureNode(data, doFit) {
 
 function removeWidget(id, skipSend = false) {
   const w = app.widgets.get(id);
-  if (w) {
-    w.dispose();
-    app.widgets.delete(id);
-    app.nodeData.delete(id);
-  }
   if (app.activeId === id) app.activeId = null;
   app.selectedIds.delete(id);
   if (!skipSend) {
     send({ type: "remove_node", id });
+  }
+  if (w) {
+    app.widgets.delete(id);
+    app.nodeData.delete(id);
+    if (!app.motion.isReduced() && w.el) {
+      w.el.classList.add("node-leaving");
+      setTimeout(() => {
+        w.dispose();
+        if (app.connections) app.connections.redrawAll();
+        if (typeof renderGroupFrames === "function") renderGroupFrames();
+        fitMaybe();
+      }, 200);
+      return;
+    }
+    w.dispose();
   }
   if (app.connections) app.connections.redrawAll();
   if (typeof renderGroupFrames === "function") renderGroupFrames();
@@ -871,12 +949,38 @@ function arrangeGrid() {
   if (ids.length === 0) return;
   const cols = Math.ceil(Math.sqrt(ids.length));
   let i = 0;
+  const reduced = app.motion?.isReduced ? app.motion.isReduced() : false;
   for (const w of app.widgets.values()) {
     if (!app.selectedIds.has(w.id)) continue;
     const col = i % cols;
     const row = Math.floor(i / cols);
-    w.setPosition(20 + col * (w.worldSize.w + 16), 20 + row * (w.worldSize.h + 16));
-    app.sendMove(w.id, w.worldPos.x, w.worldPos.y);
+    const targetX = 20 + col * (w.worldSize.w + 16);
+    const targetY = 20 + row * (w.worldSize.h + 16);
+
+    if (reduced || !w.el) {
+      w.setPosition(targetX, targetY);
+      app.sendMove(w.id, targetX, targetY);
+    } else {
+      const startX = w.worldPos.x;
+      const startY = w.worldPos.y;
+      const t0 = performance.now();
+      const dur = 280;
+      const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+      const step = (now) => {
+        const k = Math.min(1, (now - t0) / dur);
+        const e = ease(k);
+        const curX = Math.round(startX + (targetX - startX) * e);
+        const curY = Math.round(startY + (targetY - startY) * e);
+        w.setPosition(curX, curY);
+        if (k < 1) {
+          requestAnimationFrame(step);
+        } else {
+          app.sendMove(w.id, targetX, targetY);
+          if (app.connections) app.connections.redrawAll();
+        }
+      };
+      requestAnimationFrame(step);
+    }
     i++;
   }
 }
@@ -901,7 +1005,7 @@ window.addEventListener(
   "click",
   (e) => {
     if (!e.altKey) return;
-    const header = e.target.closest(".portal-header, .note-header, .term-header");
+    const header = e.target.closest(".titlebar, .portal-header, .note-header, .term-header, .ft-header");
     if (!header) return;
     const hit = widgetOf(header);
     if (hit) {
@@ -913,7 +1017,24 @@ window.addEventListener(
   true
 );
 
-/* ---------------- Minimapa (US8) ---------------- */
+// Duplo clique no cabeçalho eleva o nó em destaque para o centro (T024 / FR-016)
+window.addEventListener(
+  "dblclick",
+  (e) => {
+    if (e.target.closest("button, input, textarea, select")) return;
+    const header = e.target.closest(".titlebar, .portal-header, .note-header, .term-header, .ft-header");
+    if (!header) return;
+    const hit = widgetOf(header);
+    if (hit && app.motion?.toggleElevateNode) {
+      e.preventDefault();
+      e.stopPropagation();
+      app.motion.toggleElevateNode(hit.id);
+    }
+  },
+  true
+);
+
+/* ---------------- Minimapa Interativo (US5 / FR-018) ---------------- */
 let minimapTimer = null;
 function toggleMinimap() {
   const mm = document.getElementById("minimap");
@@ -922,6 +1043,7 @@ function toggleMinimap() {
   if (show) {
     stopMinimap();
   } else {
+    setupMinimapInteraction();
     drawMinimap();
     minimapTimer = setInterval(drawMinimap, 600);
   }
@@ -934,11 +1056,51 @@ function stopMinimap() {
   }
 }
 
+function setupMinimapInteraction() {
+  const mm = document.getElementById("minimap");
+  if (!mm || mm._hasInteract) return;
+  mm._hasInteract = true;
+  let isDragging = false;
+
+  const navigateToMinimapPoint = (e) => {
+    const rect = mm.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const b = boundsOf([...app.widgets.keys()]);
+    if (!isFinite(b.minX) || b.minX === b.maxX) return;
+    const pad = 20;
+    const W = mm.clientWidth, H = mm.clientHeight;
+    const sx = (W - pad * 2) / (b.maxX - b.minX);
+    const sy = (H - pad * 2) / (b.maxY - b.minY);
+    const s = Math.min(sx, sy);
+    const ox = pad + (W - pad * 2 - (b.maxX - b.minX) * s) / 2 - b.minX * s;
+    const oy = pad + (H - pad * 2 - (b.maxY - b.minY) * s) / 2 - b.minY * s;
+    const wx = (mx - ox) / s;
+    const wy = (my - oy) / s;
+    app.canvas.panTo(wx, wy);
+    drawMinimap();
+  };
+
+  mm.addEventListener("pointerdown", (e) => {
+    isDragging = true;
+    try { mm.setPointerCapture(e.pointerId); } catch {}
+    navigateToMinimapPoint(e);
+  });
+  mm.addEventListener("pointermove", (e) => {
+    if (isDragging) navigateToMinimapPoint(e);
+  });
+  mm.addEventListener("pointerup", () => {
+    isDragging = false;
+  });
+  mm.addEventListener("pointercancel", () => {
+    isDragging = false;
+  });
+}
+
 function drawMinimap() {
   const mm = document.getElementById("minimap");
   if (!mm || mm.classList.contains("hidden")) return;
   const W = mm.clientWidth, H = mm.clientHeight;
-  let html = "";
   const b = boundsOf([...app.widgets.keys()]);
   if (!isFinite(b.minX) || b.minX === b.maxX) {
     mm.innerHTML = "";
@@ -956,7 +1118,19 @@ function drawMinimap() {
     const y = w.worldPos.y * s + oy;
     boxes.push(`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${Math.max(2, w.worldSize.w * s).toFixed(1)}" height="${Math.max(2, w.worldSize.h * s).toFixed(1)}" rx="2"/>`);
   }
-  html = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${boxes.join("")}</svg>`;
+
+  // Retângulo representativo da viewport do canvas no minimapa (FR-018)
+  const vw = app.canvas.viewport.clientWidth;
+  const vh = app.canvas.viewport.clientHeight;
+  const vTopLeft = app.canvas.screenToWorld(0, 0);
+  const vBottomRight = app.canvas.screenToWorld(vw, vh);
+  const vx = vTopLeft.x * s + ox;
+  const vy = vTopLeft.y * s + oy;
+  const vwMinimap = (vBottomRight.x - vTopLeft.x) * s;
+  const vhMinimap = (vBottomRight.y - vTopLeft.y) * s;
+  boxes.push(`<rect class="minimap-viewport" x="${vx.toFixed(1)}" y="${vy.toFixed(1)}" width="${Math.max(6, vwMinimap).toFixed(1)}" height="${Math.max(6, vhMinimap).toFixed(1)}" rx="3"/>`);
+
+  const html = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${boxes.join("")}</svg>`;
   if (mm.innerHTML !== html) mm.innerHTML = html;
 }
 
@@ -991,7 +1165,12 @@ function showTerminalBadges(on) {
 }
 
 window.addEventListener("keyup", (e) => {
-  if (e.key === "Control" || e.key === "Meta") showTerminalBadges(false);
+  if (e.key === "Control" || e.key === "Meta") {
+    showTerminalBadges(false);
+    if (window.WorkspaceSidebar && !window.WorkspaceSidebar._pinnedNumbers) {
+      window.WorkspaceSidebar.setNumbers(false);
+    }
+  }
 });
 
 /* ---------------- toolbar / botões ---------------- */
@@ -1120,11 +1299,20 @@ window.addEventListener("keydown", (e) => {
     if (mod && !e.shiftKey && e.key.toLowerCase() === "g") { e.preventDefault(); groupSelection(); return; }
     if (mod && e.shiftKey && e.key.toLowerCase() === "t") { e.preventDefault(); arrangeGrid(); return; }
     if (mod && e.shiftKey && e.key.toLowerCase() === "m") { e.preventDefault(); toggleMinimap(); return; }
-    if (mod && e.key === "\\") { e.preventDefault(); const w = app.activeId ? app.widgets.get(app.activeId) : null; if (w && typeof w.focus === "function") w.focus(); return; }
+    if (mod && !e.altKey && e.key === "\\") {
+      e.preventDefault();
+      if (app.activeId) {
+        app.motion.focusNode(app.activeId);
+        const w = app.widgets.get(app.activeId);
+        if (w && typeof w.focus === "function") w.focus();
+      }
+      return;
+    }
     if (mod && e.altKey && e.key === "\\") { e.preventDefault(); zoomToSelection(); return; }
   }
-  // Ctrl duplo → números dos workspaces; Ctrl mantido → badges de terminais (FR-018)
+  // Ctrl mantido → badges de workspaces e de terminais (FR-006, FR-018)
   if ((e.key === "Control" || e.key === "Meta") && !isTyping(e)) {
+    if (window.WorkspaceSidebar) window.WorkspaceSidebar.setNumbers(true);
     if (!e.repeat) {
       clearTimeout(app._ctrlBadgeTimer);
       app._ctrlBadgeTimer = setTimeout(() => {
@@ -1137,7 +1325,8 @@ window.addEventListener("keydown", (e) => {
       clearTimeout(app._ctrlBadgeTimer);
       showTerminalBadges(false);
       if (window.WorkspaceSidebar) {
-        WorkspaceSidebar.setNumbers(!WorkspaceSidebar.numberMode);
+        window.WorkspaceSidebar._pinnedNumbers = !window.WorkspaceSidebar._pinnedNumbers;
+        window.WorkspaceSidebar.setNumbers(window.WorkspaceSidebar._pinnedNumbers);
       }
       app._lastCtrlAt = 0;
     } else {
