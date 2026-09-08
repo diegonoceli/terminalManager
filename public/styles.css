@@ -662,18 +662,36 @@ html, body {
   overflow: hidden;
   background: #ffffff;
   border-radius: 0 0 var(--radius) var(--radius);
+  min-height: 0; /* flexbox: permite encolher ao redimensionar o nó */
 }
 
 .portal-view-container {
   width: 100%;
   height: 100%;
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
 }
 
 .portal-webview {
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100% !important;
+  height: 100% !important;
   border: none;
   display: block;
+}
+
+/* Evitar perda de captura de ponteiro ao arrastar canvas ou redimensionar nós sobre webviews */
+#viewport.panning webview,
+#viewport.panning iframe,
+.spatial-node.dragging webview,
+.spatial-node.dragging iframe,
+.spatial-node.resizing webview,
+.spatial-node.resizing iframe {
+  pointer-events: none !important;
 }
 
 /* ---- Device Portal (Smartphone Chassis) ---- */
@@ -683,6 +701,8 @@ html, body {
   border-radius: 36px;
   padding: 10px;
   box-shadow: 0 20px 45px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  min-height: 0;
 }
 
 .device-header {
@@ -690,22 +710,42 @@ html, body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 12px;
+  padding: 0 6px 0 10px;
   color: #e4e4e7;
   cursor: grab;
 }
 
 .device-header .portal-title {
   color: #fafafa;
-  font-size: 12.5px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.device-url-input {
+  flex: 1;
+  height: 22px;
+  background: #27272a;
+  border: 1px solid #3f3f46;
+  border-radius: 4px;
+  color: #60a5fa;
+  font-family: monospace;
+  font-size: 11px;
+  padding: 0 6px;
+  outline: none;
+  min-width: 60px;
+}
+.device-url-input:focus {
+  border-color: #6366f1;
+  background: #18181b;
 }
 
 .device-status-badge {
-  font-size: 10px;
-  padding: 2px 7px;
+  font-size: 9.5px;
+  padding: 2px 6px;
   border-radius: 10px;
   font-weight: 600;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .device-status-badge.connected {
@@ -735,6 +775,7 @@ html, body {
   flex-direction: column;
   position: relative;
   border: 1px solid #3f3f46;
+  min-height: 0;
 }
 
 .phone-status-bar {
@@ -748,6 +789,7 @@ html, body {
   color: #f4f4f5;
   background: #000000;
   user-select: none;
+  flex-shrink: 0;
 }
 
 .phone-island.dynamic-island {
@@ -769,13 +811,19 @@ html, body {
 .phone-screen-container {
   flex: 1;
   position: relative;
+  width: 100%;
+  height: 100%;
   background: #ffffff;
   overflow: hidden;
+  min-height: 0;
 }
 
 .phone-webview {
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100% !important;
+  height: 100% !important;
   border: none;
   display: block;
 }
@@ -786,6 +834,7 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .phone-home-indicator::after {
@@ -794,6 +843,25 @@ html, body {
   height: 4px;
   background: #71717a;
   border-radius: 4px;
+}
+
+/* Modo paisagem (Landscape) */
+.device-portal.landscape .phone-frame {
+  flex-direction: row;
+}
+.device-portal.landscape .phone-status-bar {
+  width: 28px;
+  height: 100%;
+  flex-direction: column;
+  padding: 12px 0;
+}
+.device-portal.landscape .phone-home-indicator {
+  width: 14px;
+  height: 100%;
+}
+.device-portal.landscape .phone-home-indicator::after {
+  width: 4px;
+  height: 60px;
 }
 
 /* ---- Code Editor Widget ---- */

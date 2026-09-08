@@ -24,8 +24,10 @@ class BasePortalWidget {
   }
 
   setSize(w, h) {
-    this.worldSize.w = Math.max(260, w);
-    this.worldSize.h = Math.max(200, h);
+    const minW = this.minWidth || 260;
+    const minH = this.minHeight || 200;
+    this.worldSize.w = Math.max(minW, Number(w) || minW);
+    this.worldSize.h = Math.max(minH, Number(h) || minH);
     if (this.el) {
       this.el.style.width = `${this.worldSize.w}px`;
       this.el.style.height = `${this.worldSize.h}px`;
@@ -136,8 +138,14 @@ class BasePortalWidget {
       const zoom = this.app.canvas.zoom;
       const dw = (e.clientX - startResizePointer.x) / zoom;
       const dh = (e.clientY - startResizePointer.y) / zoom;
-      const nw = Math.max(260, Math.round(startSize.w + dw));
-      const nh = Math.max(200, Math.round(startSize.h + dh));
+      const minW = this.minWidth || 260;
+      const minH = this.minHeight || 200;
+      let nw = Math.max(minW, Math.round(startSize.w + dw));
+      let nh = Math.max(minH, Math.round(startSize.h + dh));
+      if (this.preserveAspectRatio && !e.shiftKey) {
+        const ratio = startSize.h / startSize.w;
+        nh = Math.round(nw * ratio);
+      }
       this.setSize(nw, nh);
       this.app.sendResize(this.id, 0, 0, nw, nh);
     });
@@ -191,6 +199,8 @@ class WebPortalWidget extends BasePortalWidget {
       width: opts.width || 720,
       height: opts.height || 480,
     });
+    this.minWidth = 320;
+    this.minHeight = 220;
     this.url = opts.url || "http://localhost:3000";
     this._createDOM();
   }
@@ -314,6 +324,41 @@ class WebPortalWidget extends BasePortalWidget {
       container.appendChild(iframe);
       this.viewEl = iframe;
     }
+    this._observeViewSize(container);
+  }
+
+  /** Mantém o <webview>/iframe com tamanho em px sincronizado com o container em coordenadas do mundo (sem distorção de zoom). */
+  _observeViewSize(container) {
+    const sync = () => {
+      if (!this.viewEl) return;
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      if (w && h) {
+        this.viewEl.style.width = `${w}px`;
+        this.viewEl.style.height = `${h}px`;
+      }
+    };
+    if (typeof ResizeObserver === "function") {
+      this._ro = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.contentRect && entry.contentRect.width && entry.contentRect.height) {
+            if (this.viewEl) {
+              this.viewEl.style.width = `${Math.round(entry.contentRect.width)}px`;
+              this.viewEl.style.height = `${Math.round(entry.contentRect.height)}px`;
+            }
+          } else {
+            sync();
+          }
+        }
+      });
+      this._ro.observe(container);
+    }
+    requestAnimationFrame(sync);
+  }
+
+  dispose() {
+    if (this._ro) this._ro.disconnect();
+    if (this.el && this.el.parentNode) this.el.remove();
   }
 
   navigate(url) {
@@ -338,6 +383,13 @@ class WebPortalWidget extends BasePortalWidget {
   }
 }
 
+const MOBILE_USER_AGENTS = {
+  pixel9:
+    "Mozilla/5.0 (Linux; Android 14; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36",
+  iphone17:
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
+};
+
 /* =========================================================================
    2. DevicePortalWidget: Mobile phone device frame (Pixel 9 / iPhone)
    ========================================================================= */
@@ -353,12 +405,16 @@ class DevicePortalWidget extends BasePortalWidget {
     this.deviceModel = opts.deviceModel || "pixel9";
     this.url = opts.url || "http://localhost:3000";
     this.status = opts.status || "connected";
+    this.orientation = opts.orientation || (this.worldSize.w > this.worldSize.h ? "landscape" : "portrait");
+    this.preserveAspectRatio = true;
+    this.minWidth = 240;
+    this.minHeight = 360;
     this._createDOM();
   }
 
   _createDOM() {
     const el = document.createElement("div");
-    el.className = `spatial-node portal-widget device-portal ${this.deviceModel}`;
+    el.className = `spatial-node portal-widget device-portal ${this.deviceModel}${this.orientation === "landscape" ? " landscape" : ""}`;
     el.dataset.id = this.id;
     el.style.width = `${this.worldSize.w}px`;
     el.style.height = `${this.worldSize.h}px`;
@@ -370,8 +426,10 @@ class DevicePortalWidget extends BasePortalWidget {
       <div class="device-header">
         <div class="device-notch-icon">${isApple ? "📱" : "🤖"}</div>
         <div class="portal-title">${this.title}</div>
+        <input type="text" class="device-url-input" value="${this.url}" spellcheck="false" placeholder="http://localhost:3000" title="URL da aplicação móvel" />
         <div class="device-status-badge ${this.status}">${this.status === "connected" ? "Online" : "Offline"}</div>
         <div class="portal-actions">
+          <button class="portal-btn btn-rotate" title="Alternar orientação (Retrato / Paisagem)">🔄</button>
           <button class="portal-btn btn-reload" title="Recarregar tela">↻</button>
           <button class="portal-btn btn-close" title="Fechar emulador">✕</button>
         </div>
@@ -408,6 +466,7 @@ class DevicePortalWidget extends BasePortalWidget {
     const portLeft = el.querySelector(".conn-port-left");
     const portRight = el.querySelector(".conn-port-right");
     const screenContainer = el.querySelector(".phone-screen-container");
+    const urlInput = el.querySelector(".device-url-input");
 
     this._setupDragAndResize(header, resizeHandle);
     this._setupConnectionPorts(portLeft, portRight);
@@ -423,6 +482,22 @@ class DevicePortalWidget extends BasePortalWidget {
 
     el.querySelector(".btn-reload").addEventListener("click", () => this.reload());
 
+    el.querySelector(".btn-rotate")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.toggleOrientation();
+    });
+
+    urlInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        let val = urlInput.value.trim();
+        if (val && !val.startsWith("http://") && !val.startsWith("https://")) {
+          val = "http://" + val;
+          urlInput.value = val;
+        }
+        this.setURL(val);
+      }
+    });
+
     this._createView(screenContainer);
 
     // Clock updater
@@ -437,13 +512,35 @@ class DevicePortalWidget extends BasePortalWidget {
     this._timeInterval = setInterval(updateTime, 30000);
   }
 
+  toggleOrientation() {
+    this.orientation = this.orientation === "landscape" ? "portrait" : "landscape";
+    this.el.classList.toggle("landscape", this.orientation === "landscape");
+    const nw = this.worldSize.h;
+    const nh = this.worldSize.w;
+    this.setSize(nw, nh);
+    this.app.sendResize(this.id, 0, 0, nw, nh);
+    this.app.sendUpdateNode(this.id, { orientation: this.orientation });
+  }
+
   _createView(container) {
     container.innerHTML = "";
     if (window.appBridge) {
       const webview = document.createElement("webview");
       webview.setAttribute("src", this.url);
       webview.setAttribute("allowpopups", "true");
+      const ua = MOBILE_USER_AGENTS[this.deviceModel] || MOBILE_USER_AGENTS.pixel9;
+      webview.setAttribute("useragent", ua);
       webview.className = "phone-webview";
+      webview.addEventListener("did-stop-loading", () => {
+        try {
+          const current = webview.getURL();
+          if (current && current !== "about:blank") {
+            this.url = current;
+            const input = this.el.querySelector(".device-url-input");
+            if (input && document.activeElement !== input) input.value = current;
+          }
+        } catch {}
+      });
       container.appendChild(webview);
       this.viewEl = webview;
     } else {
@@ -453,6 +550,36 @@ class DevicePortalWidget extends BasePortalWidget {
       container.appendChild(iframe);
       this.viewEl = iframe;
     }
+    this._observeViewSize(container);
+  }
+
+  /** Mantém o <webview>/iframe do aparelho sincronizado com tamanho do container em coordenadas do mundo. */
+  _observeViewSize(container) {
+    const sync = () => {
+      if (!this.viewEl) return;
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      if (w && h) {
+        this.viewEl.style.width = `${w}px`;
+        this.viewEl.style.height = `${h}px`;
+      }
+    };
+    if (typeof ResizeObserver === "function") {
+      this._ro = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.contentRect && entry.contentRect.width && entry.contentRect.height) {
+            if (this.viewEl) {
+              this.viewEl.style.width = `${Math.round(entry.contentRect.width)}px`;
+              this.viewEl.style.height = `${Math.round(entry.contentRect.height)}px`;
+            }
+          } else {
+            sync();
+          }
+        }
+      });
+      this._ro.observe(container);
+    }
+    requestAnimationFrame(sync);
   }
 
   reload() {
@@ -468,11 +595,14 @@ class DevicePortalWidget extends BasePortalWidget {
       if (typeof this.viewEl.loadURL === "function") this.viewEl.loadURL(url);
       else this.viewEl.src = url;
     }
+    const input = this.el.querySelector(".device-url-input");
+    if (input) input.value = url;
     this.app.sendUpdateNode(this.id, { url });
   }
 
   dispose() {
-    clearInterval(this._timeInterval);
+    if (this._timeInterval) clearInterval(this._timeInterval);
+    if (this._ro) this._ro.disconnect();
     super.dispose();
   }
 }

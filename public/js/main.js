@@ -320,6 +320,10 @@ function ensureNode(data, doFit) {
     w.setPosition(data.x, data.y);
     w.setSize(data.width, data.height);
     if (data.title) w.updateTitle(data.title);
+    if (data.orientation && typeof w.toggleOrientation === "function" && w.orientation !== data.orientation) {
+      w.orientation = data.orientation;
+      w.el.classList.toggle("landscape", data.orientation === "landscape");
+    }
   }
   if (doFit && typeof w.fit === "function") w.fit();
   app.nodeData.set(data.id, { ...data });
@@ -469,6 +473,7 @@ function createDevicePortal(model = "pixel9") {
       title: model === "iphone17" ? "iPhone 17 Pro Max" : "Pixel 9",
       url: "http://localhost:3000",
       status: "connected",
+      orientation: "portrait",
       x: Math.round(center.x - 190 + stagger),
       y: Math.round(center.y - 370 + stagger),
       width: 380,
