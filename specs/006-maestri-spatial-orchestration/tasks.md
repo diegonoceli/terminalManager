@@ -146,16 +146,16 @@
 
 ### Implementation for User Story 5
 
-- [ ] T048 [P] [US5] Implementar `electron/filetree-service.js`: `fs_read_dir` (lazy por pasta), CRUD (`create/rename/move/delete`) e broadcast de resultados
-- [ ] T049 [P] [US5] Implementar operações Git em `electron/filetree-service.js` via `child_process` (`branch_show`, status, `commit`, `pull/push`, `checkout`, `branch`, `merge`, `fetch`, `stash`) com `cwd=workspace` — FR-030
-- [ ] T050 [US5] Implementar IPC fs/git em `electron/main.js` (mensagens `fs_*`, `git_*` do contrato) com respostas `fs_dir_result`/`git_result`
-- [ ] T051 [P] [US5] Implementar `FileTreeWidget` em `public/js/filetree.js` (modo Lista): árvore expansível, menu de contexto (CRUD), indicador de branch e menu Git
-- [ ] T052 [US5] Registrar fábrica do tipo `file-tree` em `public/js/main.js` e botão de ferramenta "Árvore de Arquivos" na toolbar
-- [ ] T053 [US5] Implementar modo Grade de Ícones (miniaturas de imagens/PDF/vídeo via `file://`) em `public/js/filetree.js` — FR-027
-- [ ] T054 [US5] Implementar modo Diff (uncommitted lado a lado, base vs atual via `git diff`) em `public/js/filetree.js` — FR-027
-- [ ] T055 [US5] Implementar modo Graph (grafo SVG a partir de `git log --graph --all --decorate --oneline`) em `public/js/filetree.js` — FR-027
+- [X] T048 [P] [US5] Implementar `electron/filetree-service.js`: `fs_read_dir` (lazy por pasta), CRUD (`create/rename/move/delete`) e broadcast de resultados
+- [X] T049 [P] [US5] Implementar operações Git em `electron/filetree-service.js` via `child_process` (`branch_show`, status, `commit`, `pull/push`, `checkout`, `branch`, `merge`, `fetch`, `stash`) com `cwd=workspace` — FR-030
+- [X] T050 [US5] Implementar IPC fs/git em `electron/main.js` (mensagens `fs_*`, `git_*` do contrato) com respostas `fs_dir_result`/`git_result`
+- [X] T051 [P] [US5] Implementar `FileTreeWidget` em `public/js/filetree.js` (modo Lista): árvore expansível, menu de contexto (CRUD), indicador de branch e menu Git
+- [X] T052 [US5] Registrar fábrica do tipo `file-tree` em `public/js/main.js` e botão de ferramenta "Árvore de Arquivos" na toolbar
+- [X] T053 [US5] Implementar modo Grade de Ícones (miniaturas de imagens/PDF/vídeo via `file://`) em `public/js/filetree.js` — FR-027
+- [X] T054 [US5] Implementar modo Diff (uncommitted lado a lado, base vs atual via `git diff`) em `public/js/filetree.js` — FR-027
+- [X] T055 [US5] Implementar modo Graph (grafo SVG a partir de `git log --graph --all --decorate --oneline`) em `public/js/filetree.js` — FR-027
 - [ ] T056 [US5] Implementar drag-drop: arquivo → terminal (insere caminho citado, reuso do fluxo existente) e arquivo → canvas (cria nó de pré-visualização do arquivo) em `public/js/filetree.js` + `main.js` — FR-029
-- [ ] T057 [US5] Tratar estados de erro/empty das operações fs/git (mensagem legível, estado consistente) e `git_result` com erro — edge cases do spec
+- [X] T057 [US5] Tratar estados de erro/empty das operações fs/git (mensagem legível, estado consistente) e `git_result` com erro — edge cases do spec
 
 **Checkpoint**: US5 isolada — navegação, CRUD, modos Lista/Grade/Diff/Graph, Git ops e drag-drop operacionais.
 
@@ -169,12 +169,12 @@
 
 ### Implementation for User Story 6
 
-- [ ] T058 [P] [US6] Estender `ConnectionData` com `kind` (`node|agent-agent|agent-note|agent-portal`) e `log: ActionLogEntry[]` em `electron/terminal-manager.js` + validações (extremidade terminal-com-agente; `from!==to`; sem duplicidade) — data-model §6
+- [X] T058 [P] [US6] Estender `ConnectionData` com `kind` (`node|agent-agent|agent-note|agent-portal`) e `log: ActionLogEntry[]` em `electron/terminal-manager.js` + validações (extremidade terminal-com-agente; `from!==to`; sem duplicidade) — data-model §6
 - [ ] T059 [US6] Implementar `electron/connectors/agent-comm.js`: ponte do comando `maestri-agent` (resolver por IPC; entregar no PTY de destino; `note read/write` via `notes-store`; `portal navigate/reload/back` → renderer `portal_control`)
 - [ ] T060 [US6] Instalar a skill nos agentes conectados em `agent-comm.js`: instrução de uso na sessão + garantir `maestri-agent` no PATH; reaplicar em novo spawn/resume (US3 hook); `ping` valida instalação — FR-034
 - [ ] T061 [US6] Registrar toda ação no `ConnectionData.log` (at, fromNodeId, toNodeId, verb, summary) e persistir — FR-055
 - [ ] T062 [P] [US6] Implementar IPC `connection_inspect`/`connection_inspect_result` e painel de inspeção (badge de conexões no cabeçalho listando conexões + histórico) em `public/js/connections.js` — FR-037
-- [ ] T063 [US6] Rotular automaticamente o `kind` ao conectar por tipo de extremidade (terminal+terminal→agent-agent; terminal+nota→agent-note; terminal+portal→agent-portal) em `public/js/connections.js` — FR-034..036
+- [X] T063 [US6] Rotular automaticamente o `kind` ao conectar por tipo de extremidade (terminal+terminal→agent-agent; terminal+nota→agent-note; terminal+portal→agent-portal) em `public/js/connections.js` — FR-034..036
 - [ ] T064 [US6] Implementar controle de portal a partir de agente em `public/js/portals.js`: ouvir `portal_control` e executar no `<webview>` do portal alvo — FR-036
 
 **Checkpoint**: US6 isolada — skill instalada e operante entre agentes conectados, acesso a notas/portais e histórico visível.

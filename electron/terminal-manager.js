@@ -828,16 +828,48 @@ export class TerminalManager {
     return [...this.connections.values()];
   }
 
-  addConnection({ from, to, label = "", style = "rope", kind = "node" }) {
+  addConnection({ from, to, label = "", style = "rope", kind }) {
     if (!from || !to || from === to) return null;
     for (const conn of this.connections.values()) {
       if (conn.from === from && conn.to === to) return conn;
     }
     const id = `conn_${randomUUID().slice(0, 8)}`;
-    const conn = { id, from, to, label, style, kind, log: [] };
+    const conn = {
+      id,
+      from,
+      to,
+      label,
+      style: style === "circuit" ? "circuit" : "rope",
+      kind: kind || this._classifyConnection(from, to),
+      log: [],
+    };
     this.connections.set(id, conn);
     this.saveLayout();
     return conn;
+  }
+
+  /** Classifica a conexão pela natureza dos extremos (FR-034..036 / data-model §6). */
+  _classifyConnection(from, to) {
+    const info = (id) => {
+      const term = this.terminals.get(id);
+      if (term) return { t: "terminal", agent: !!term.agent };
+      const node = this.nodes.get(id);
+      if (!node) return { t: "unknown" };
+      const type = node.type;
+      if (type === "note") return { t: "note" };
+      if (type === "web-portal" || type === "device-portal") return { t: "portal" };
+      return { t: "other", type };
+    };
+    const a = info(from);
+    const b = info(to);
+    const agentA = a.t === "terminal" && a.agent;
+    const agentB = b.t === "terminal" && b.agent;
+    if (agentA && agentB) return "agent-agent";
+    if (agentA && b.t === "note") return "agent-note";
+    if (agentB && a.t === "note") return "agent-note";
+    if (agentA && b.t === "portal") return "agent-portal";
+    if (agentB && a.t === "portal") return "agent-portal";
+    return "node";
   }
 
   updateConnection(id, patch = {}) {
