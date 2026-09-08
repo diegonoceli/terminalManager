@@ -130,6 +130,40 @@ class TermWidget {
     this.term.open(hostDiv);
     this.term.loadAddon(this.fitAddon);
 
+    // Compensate for canvas scale/zoom so text selection and clicks match cursor position
+    const mouseService = this.term._core?._mouseService;
+    if (mouseService) {
+      const origGetCoords = mouseService.getCoords.bind(mouseService);
+      const origGetMouseReportCoords = mouseService.getMouseReportCoords.bind(mouseService);
+
+      const adjustEvent = (e, element) => {
+        const zoom = this.app?.canvas?.zoom || 1;
+        if (zoom === 1 || !e || !element || typeof element.getBoundingClientRect !== "function") {
+          return e;
+        }
+        const rect = element.getBoundingClientRect();
+        const unscaledX = rect.left + (e.clientX - rect.left) / zoom;
+        const unscaledY = rect.top + (e.clientY - rect.top) / zoom;
+
+        return new Proxy(e, {
+          get(target, prop) {
+            if (prop === "clientX") return unscaledX;
+            if (prop === "clientY") return unscaledY;
+            const val = Reflect.get(target, prop);
+            return typeof val === "function" ? val.bind(target) : val;
+          },
+        });
+      };
+
+      mouseService.getCoords = (e, element, cols, rows, isSelection) => {
+        return origGetCoords(adjustEvent(e, element), element, cols, rows, isSelection);
+      };
+
+      mouseService.getMouseReportCoords = (e, element) => {
+        return origGetMouseReportCoords(adjustEvent(e, element), element);
+      };
+    }
+
     // Register Link Provider for clickable URLs and localhost
     if (typeof this.term.registerLinkProvider === "function") {
       const urlRegex = /(https?:\/\/[^\s"'`<>]+|localhost:[0-9]+[^\s"'`<>]*)/gi;
@@ -164,7 +198,7 @@ class TermWidget {
       });
     }
 
-    // Attach custom key handler for reliable Ctrl+V / Cmd+V paste
+    // Attach custom key handler for reliable Ctrl+C / Cmd+C copy and Ctrl+V / Cmd+V paste
     this.term.attachCustomKeyEventHandler((e) => {
       if (e.type === "keydown") {
         const isPaste =
@@ -174,13 +208,44 @@ class TermWidget {
 
         if (isPaste) {
           e.preventDefault();
-          navigator.clipboard
-            .readText()
-            .then((text) => {
-              if (text) this.app.sendInput(this.id, text);
-            })
-            .catch(() => {});
+          let pasted = false;
+          if (window.appBridge && typeof window.appBridge.clipboardRead === "function") {
+            try {
+              const text = window.appBridge.clipboardRead();
+              if (text) {
+                this.app.sendInput(this.id, text);
+                pasted = true;
+              }
+            } catch {}
+          }
+          if (!pasted && navigator.clipboard) {
+            navigator.clipboard
+              .readText()
+              .then((text) => {
+                if (text) this.app.sendInput(this.id, text);
+              })
+              .catch(() => {});
+          }
           return false;
+        }
+
+        const isCopy =
+          (e.metaKey && !e.ctrlKey && e.key.toLowerCase() === "c") ||
+          (e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "c") ||
+          (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "c");
+
+        if (isCopy) {
+          if (this.term.hasSelection()) {
+            const text = this.term.getSelection();
+            if (text) {
+              this.copyToClipboard(text);
+              e.preventDefault();
+              return false;
+            }
+          } else if (e.metaKey) {
+            e.preventDefault();
+            return false;
+          }
         }
       }
       return true;
@@ -191,6 +256,26 @@ class TermWidget {
       this.app.sendResize(this.id, cols, rows, this.worldSize.w, this.worldSize.h);
     });
     this.fit();
+  }
+
+  copyToClipboard(text) {
+    if (!text) return false;
+    let copied = false;
+    if (window.appBridge && typeof window.appBridge.clipboardWrite === "function") {
+      try {
+        window.appBridge.clipboardWrite(text);
+        copied = true;
+      } catch (err) {
+        console.warn("appBridge.clipboardWrite failed:", err);
+      }
+    }
+    if (!copied && navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      navigator.clipboard.writeText(text).catch((err) => {
+        console.warn("Fallback clipboard write failed:", err);
+      });
+      copied = true;
+    }
+    return copied;
   }
 
   fit() {
@@ -520,18 +605,36 @@ class TermWidget {
       }
     }, { passive: false });
 
-    // Right-click paste support
+    // Right-click copy/paste support: copy if text is selected, paste if no selection
     this.termHost.addEventListener("contextmenu", async (e) => {
       e.preventDefault();
       e.stopPropagation();
-      try {
-        const text = await navigator.clipboard.readText();
+      this.app.setActive(this.id);
+
+      if (this.term.hasSelection()) {
+        const text = this.term.getSelection();
         if (text) {
-          this.app.setActive(this.id);
-          this.app.sendInput(this.id, text);
+          this.copyToClipboard(text);
+          return;
         }
-      } catch (err) {
-        console.error("Erro ao colar do clipboard:", err);
+      }
+
+      let text = "";
+      if (window.appBridge && typeof window.appBridge.clipboardRead === "function") {
+        try {
+          text = window.appBridge.clipboardRead();
+        } catch {}
+      }
+      if (!text && navigator.clipboard) {
+        try {
+          text = await navigator.clipboard.readText();
+        } catch (err) {
+          console.error("Erro ao colar do clipboard:", err);
+        }
+      }
+
+      if (text) {
+        this.app.sendInput(this.id, text);
       }
     });
 

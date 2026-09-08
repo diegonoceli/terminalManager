@@ -347,6 +347,21 @@ window.addEventListener("resize", () => {
   for (const w of app.widgets.values()) w.fit();
 });
 
+// Native / System copy command listener: syncs active terminal selection to clipboard
+document.addEventListener("copy", (e) => {
+  const activeWidget = app.activeId ? app.widgets.get(app.activeId) : null;
+  if (activeWidget && activeWidget.term && activeWidget.term.hasSelection()) {
+    const text = activeWidget.term.getSelection();
+    if (text) {
+      if (e.clipboardData) {
+        e.clipboardData.setData("text/plain", text);
+        e.preventDefault();
+      }
+      activeWidget.copyToClipboard(text);
+    }
+  }
+});
+
 /* ---------------- conexão / toast ---------------- */
 function setConn(ok) {
   connDot.classList.toggle("on", ok);
