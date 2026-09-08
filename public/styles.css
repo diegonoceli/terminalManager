@@ -517,3 +517,421 @@ html, body {
   outline-offset: -4px;
 }
 
+
+/* ==========================================================================
+   Spatial Nodes, Device Portals & Workflows (Floors) Styles
+   ========================================================================== */
+
+.spatial-node {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: var(--radius);
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+  overflow: visible;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.spatial-node.active {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 1px #6366f1, 0 12px 35px rgba(99, 102, 241, 0.2);
+}
+
+.spatial-resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  cursor: nwse-resize;
+  z-index: 25;
+}
+
+.spatial-resize-handle::after {
+  content: "";
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+}
+
+.conn-port-left {
+  left: -7px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.conn-port-left:hover {
+  transform: translateY(-50%) scale(1.35);
+}
+
+.conn-port-right {
+  right: -7px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.conn-port-right:hover {
+  transform: translateY(-50%) scale(1.35);
+}
+
+/* ---- Web Portal ---- */
+.web-portal .portal-header {
+  height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  background: #f1f1ee;
+  border-bottom: 1px solid var(--panel-border);
+  border-radius: var(--radius) var(--radius) 0 0;
+  cursor: grab;
+}
+
+.web-portal.dragging .portal-header {
+  cursor: grabbing;
+}
+
+.portal-icon {
+  font-size: 14px;
+}
+
+.portal-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.portal-browser-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  margin: 0 8px;
+}
+
+.portal-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 13px;
+  transition: background 0.12s;
+}
+
+.portal-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.portal-url-input {
+  flex: 1;
+  height: 24px;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 0 8px;
+  font-size: 11.5px;
+  font-family: monospace;
+  color: #2563eb;
+  outline: none;
+}
+
+.portal-url-input:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+
+.portal-content {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: #ffffff;
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+
+.portal-view-container {
+  width: 100%;
+  height: 100%;
+}
+
+.portal-webview {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+
+/* ---- Device Portal (Smartphone Chassis) ---- */
+.device-portal {
+  background: #18181b;
+  border: 2px solid #27272a;
+  border-radius: 36px;
+  padding: 10px;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.35);
+}
+
+.device-header {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  color: #e4e4e7;
+  cursor: grab;
+}
+
+.device-header .portal-title {
+  color: #fafafa;
+  font-size: 12.5px;
+}
+
+.device-status-badge {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.device-status-badge.connected {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+}
+
+.device-status-badge.offline {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+}
+
+.device-header .portal-btn {
+  color: #a1a1aa;
+}
+.device-header .portal-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.phone-frame {
+  flex: 1;
+  background: #000000;
+  border-radius: 28px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  border: 1px solid #3f3f46;
+}
+
+.phone-status-bar {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #f4f4f5;
+  background: #000000;
+  user-select: none;
+}
+
+.phone-island.dynamic-island {
+  width: 75px;
+  height: 18px;
+  background: #000000;
+  border-radius: 12px;
+  border: 1px solid #27272a;
+}
+
+.phone-island.pinhole {
+  width: 11px;
+  height: 11px;
+  background: #09090b;
+  border-radius: 50%;
+  border: 1px solid #27272a;
+}
+
+.phone-screen-container {
+  flex: 1;
+  position: relative;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.phone-webview {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+
+.phone-home-indicator {
+  height: 14px;
+  background: #000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.phone-home-indicator::after {
+  content: "";
+  width: 80px;
+  height: 4px;
+  background: #71717a;
+  border-radius: 4px;
+}
+
+/* ---- Code Editor Widget ---- */
+.editor-widget {
+  background: #1e1e1e;
+  border: 1px solid #333333;
+  color: #d4d4d4;
+}
+
+.editor-widget .portal-header {
+  background: #252526;
+  border-bottom: 1px solid #333333;
+  height: 36px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: grab;
+}
+
+.editor-widget .portal-title {
+  color: #cccccc;
+}
+
+.editor-widget .portal-btn {
+  color: #cccccc;
+}
+.editor-widget .portal-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.editor-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1;
+}
+
+.editor-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.editor-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #858585;
+  font-weight: 600;
+}
+
+.editor-path {
+  font-family: monospace;
+  font-size: 12px;
+  padding: 6px 10px;
+  background: #2d2d2d;
+  border-radius: 6px;
+  color: #9cdcfe;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-actions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.btn-vscode-open, .btn-folder-open {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 12.5px;
+  cursor: pointer;
+  border: none;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.btn-vscode-open {
+  background: #007acc;
+  color: #ffffff;
+}
+.btn-vscode-open:hover {
+  background: #0062a3;
+}
+
+.btn-folder-open {
+  background: #333333;
+  color: #cccccc;
+}
+.btn-folder-open:hover {
+  background: #3c3c3c;
+}
+
+.editor-meta {
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid #2d2d2d;
+  font-size: 11px;
+  color: #858585;
+  display: flex;
+  justify-content: space-between;
+}
+
+.editor-meta span {
+  color: #4ec9b0;
+}
+
+/* ---- Toolbar Floors & Node Buttons ---- */
+.floors-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 6px;
+}
+
+.floor-select {
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid var(--panel-border);
+  background: #ffffff;
+  padding: 0 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  outline: none;
+  cursor: pointer;
+}
+
+.btn-node-add {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+

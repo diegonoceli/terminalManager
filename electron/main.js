@@ -39,26 +39,31 @@ function showNotification({ id, title, body }) {
   notif.show();
 }
 
+function broadcastLayout() {
+  broadcast({
+    type: "layout",
+    nodes: manager.listNodes(),
+    terminals: manager.list(), // legacy compatibility
+    connections: manager.listConnections(),
+    activeWorkflowId: manager.activeWorkflowId,
+    workflows: manager.listWorkflows(),
+  });
+}
+
 function handleMessage(msg) {
   if (!msg || typeof msg.type !== "string") return;
   switch (msg.type) {
     case "layout_request":
-      for (const win of windows) {
-        if (!win.isDestroyed()) {
-          win.webContents.send(
-            "msg",
-            JSON.stringify({
-              type: "layout",
-              terminals: manager.list(),
-              connections: manager.listConnections(),
-            })
-          );
-        }
-      }
+      broadcastLayout();
       break;
     case "create": {
       const t = manager.create(msg.layout || {});
       broadcast({ type: "created", terminal: t });
+      break;
+    }
+    case "create_node": {
+      const n = manager.createNode(msg.node || {});
+      broadcast({ type: "node_created", node: n });
       break;
     }
     case "input":
@@ -87,10 +92,40 @@ function handleMessage(msg) {
       break;
     }
     case "kill":
-      if (manager.kill(msg.id)) {
+    case "remove_node":
+      if (manager.removeNode(msg.id)) {
+        broadcast({ type: "node_removed", id: msg.id });
         broadcast({ type: "killed", id: msg.id });
       }
       break;
+    case "update_node":
+      manager.updateNodeConfig(msg.id, msg.config);
+      break;
+    case "workflow_create":
+      manager.createWorkflow(msg.name);
+      broadcastLayout();
+      break;
+    case "workflow_switch":
+      manager.switchWorkflow(msg.workflowId);
+      broadcastLayout();
+      break;
+    case "workflow_rename":
+      manager.renameWorkflow(msg.workflowId, msg.name);
+      broadcastLayout();
+      break;
+    case "workflow_delete":
+      manager.deleteWorkflow(msg.workflowId);
+      broadcastLayout();
+      break;
+    case "open_vscode": {
+      const targetPath = msg.path || process.cwd();
+      import("node:child_process").then(({ exec }) => {
+        exec(`code "${targetPath}"`, (err) => {
+          if (err) shell.openPath(targetPath);
+        });
+      });
+      break;
+    }
     case "create_connection": {
       const conn = manager.addConnection(msg);
       if (conn) {
@@ -136,7 +171,7 @@ function createWindow() {
       preload: join(__dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
+      webviewTag: true,
     },
   });
   win.removeMenu();

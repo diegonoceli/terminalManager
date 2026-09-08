@@ -14,8 +14,25 @@
       <span class="name">terminal manager</span>
     </div>
     <div class="tools">
+      <div class="floors-control">
+        <span style="font-size: 11.5px; font-weight: 600; color: var(--muted);">Floor:</span>
+        <select id="floor-select" class="floor-select" title="Alternar Workspace/Floor"></select>
+        <button id="btn-floor-new" class="btn" title="Criar novo Floor">+</button>
+        <button id="btn-floor-rename" class="btn" title="Renomear Floor atual">✎</button>
+        <button id="btn-floor-del" class="btn" title="Excluir Floor atual">✕</button>
+      </div>
+      <div class="sep"></div>
       <button id="btn-new" class="btn primary" title="Criar novo terminal (N)">
-        <span class="icon">+</span> Novo terminal
+        <span class="icon">+</span> Terminal
+      </button>
+      <button id="btn-new-web" class="btn" title="Adicionar Navegador Web">
+        <span class="icon">🌐</span> Web
+      </button>
+      <button id="btn-new-device" class="btn" title="Adicionar Device Portal (Pixel 9 / iPhone)">
+        <span class="icon">📱</span> Device
+      </button>
+      <button id="btn-new-editor" class="btn" title="Adicionar Editor de Código / VS Code">
+        <span class="icon">💻</span> Editor
       </button>
       <div class="sep"></div>
       <button id="btn-focus" class="btn toggle" title="Focar terminal ao clicar">
@@ -66,6 +83,7 @@
   <script src="./js/canvas.js"></script>
   <script src="./js/connections.js"></script>
   <script src="./js/terminal.js"></script>
+  <script src="./js/portals.js"></script>
   <script src="./js/main.js"></script>
 </body>
 </html>

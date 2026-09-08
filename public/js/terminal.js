@@ -149,6 +149,8 @@ class TermWidget {
           get(target, prop) {
             if (prop === "clientX") return unscaledX;
             if (prop === "clientY") return unscaledY;
+            if (prop === "pageX") return unscaledX + window.scrollX;
+            if (prop === "pageY") return unscaledY + window.scrollY;
             const val = Reflect.get(target, prop);
             return typeof val === "function" ? val.bind(target) : val;
           },
@@ -161,6 +163,31 @@ class TermWidget {
 
       mouseService.getMouseReportCoords = (e, element) => {
         return origGetMouseReportCoords(adjustEvent(e, element), element);
+      };
+    }
+
+    const selectionService = this.term._core?._selectionService;
+    if (selectionService) {
+      selectionService._getMouseEventScrollAmount = (e) => {
+        const zoom = this.app?.canvas?.zoom || 1;
+        const screenEl = selectionService._screenElement;
+        if (!screenEl || typeof screenEl.getBoundingClientRect !== "function") return 0;
+        const rect = screenEl.getBoundingClientRect();
+        const unscaledY = (e.clientY - rect.top) / zoom;
+        const canvasHeight =
+          selectionService._renderService?.dimensions?.css?.canvas?.height ||
+          screenEl.clientHeight ||
+          400;
+        if (unscaledY >= 0 && unscaledY <= canvasHeight) {
+          return 0;
+        }
+        let diff = unscaledY;
+        if (diff > canvasHeight) {
+          diff -= canvasHeight;
+        }
+        diff = Math.min(Math.max(diff, -50), 50);
+        diff /= 50;
+        return (diff / Math.abs(diff)) + Math.round(14 * diff);
       };
     }
 
@@ -299,6 +326,35 @@ class TermWidget {
 
   write(data) {
     this.term.write(data);
+    this._detectAndNotifyConnectedUrls(data);
+  }
+
+  _detectAndNotifyConnectedUrls(data) {
+    if (!data || typeof data !== "string") return;
+    const urlRegex = /(https?:\/\/[^\s"'`<>]+|localhost:[0-9]+[^\s"'`<>]*)/gi;
+    const match = urlRegex.exec(data);
+    if (!match) return;
+
+    let detectedUrl = match[0];
+    if (detectedUrl.startsWith("localhost:")) detectedUrl = "http://" + detectedUrl;
+
+    if (!this.app?.connections) return;
+    for (const conn of this.app.connections.connections.values()) {
+      if (conn.from === this.id || conn.to === this.id) {
+        const targetId = conn.from === this.id ? conn.to : conn.from;
+        const targetNode = this.app.getNode ? this.app.getNode(targetId) : null;
+        if (targetNode && (targetNode.type === "web-portal" || targetNode.type === "device-portal")) {
+          this.app.connections.triggerPulse(this.id, targetId);
+          if (targetNode.url !== detectedUrl) {
+            if (typeof targetNode.setURL === "function") {
+              targetNode.setURL(detectedUrl);
+            } else if (typeof targetNode.navigate === "function") {
+              targetNode.navigate(detectedUrl);
+            }
+          }
+        }
+      }
+    }
   }
 
   /* ---- estilo ---- */

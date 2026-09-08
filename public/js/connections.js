@@ -1,4 +1,4 @@
-// Spatial connections layer for Terminal Manager (Canvas de terminais)
+// Spatial universal connections layer for Terminal Manager (Canvas de nós e portais)
 
 class ConnectionsManager {
   constructor(app) {
@@ -16,9 +16,18 @@ class ConnectionsManager {
     window.addEventListener("pointercancel", (e) => this._onPointerUp(e));
   }
 
+  _getNode(id) {
+    if (this.app.getNode) return this.app.getNode(id);
+    return this.app.widgets?.get(id);
+  }
+
+  _getAllNodes() {
+    if (this.app.getAllNodes) return this.app.getAllNodes();
+    return [...(this.app.widgets?.values() || [])];
+  }
+
   setConnections(list) {
     this.connections.clear();
-    // Clear all existing paths in SVG except defs
     const groups = this.svg.querySelectorAll(".connection-group");
     groups.forEach((g) => g.remove());
 
@@ -55,7 +64,7 @@ class ConnectionsManager {
     // Click to remove / interact
     g.addEventListener("dblclick", (e) => {
       e.stopPropagation();
-      if (confirm("Remover esta conexão entre terminais?")) {
+      if (confirm("Remover esta conexão no workflow?")) {
         this.app.sendRemoveConnection(conn.id);
       }
     });
@@ -105,8 +114,8 @@ class ConnectionsManager {
     const conn = this.connections.get(id);
     if (!conn) return;
 
-    const w1 = this.app.widgets.get(conn.from);
-    const w2 = this.app.widgets.get(conn.to);
+    const w1 = this._getNode(conn.from);
+    const w2 = this._getNode(conn.to);
 
     const g = this.svg.querySelector(`.connection-group[data-id="${id}"]`);
     if (!g) return;
@@ -134,12 +143,11 @@ class ConnectionsManager {
     }
   }
 
-  triggerPulse(fromTerminalId, toTerminalId) {
+  triggerPulse(fromNodeId, toNodeId) {
     for (const [id, conn] of this.connections.entries()) {
       if (
-        (conn.from === fromTerminalId && conn.to === toTerminalId) ||
-        (conn.from === toTerminalId && conn.to === fromTerminalId) ||
-        (conn.from === fromTerminalId || conn.to === fromTerminalId)
+        (toNodeId && ((conn.from === fromNodeId && conn.to === toNodeId) || (conn.from === toNodeId && conn.to === fromNodeId))) ||
+        (!toNodeId && (conn.from === fromNodeId || conn.to === fromNodeId))
       ) {
         this._animatePulse(id);
       }
@@ -175,15 +183,15 @@ class ConnectionsManager {
   }
 
   /* ---- Drag to connect interaction ---- */
-  startDrag(sourceTerminalId, clientX, clientY) {
-    const w = this.app.widgets.get(sourceTerminalId);
+  startDrag(sourceNodeId, clientX, clientY) {
+    const w = this._getNode(sourceNodeId);
     if (!w) return;
 
     const canvas = this.app.canvas;
     const worldPt = canvas.screenToWorld(clientX, clientY);
 
     this.activeDrag = {
-      fromId: sourceTerminalId,
+      fromId: sourceNodeId,
       currentWorld: worldPt,
     };
 
@@ -204,7 +212,7 @@ class ConnectionsManager {
 
   _updatePreview() {
     if (!this.activeDrag || !this.previewPath) return;
-    const w = this.app.widgets.get(this.activeDrag.fromId);
+    const w = this._getNode(this.activeDrag.fromId);
     if (!w) return;
 
     const p = w.worldPos;
@@ -219,26 +227,27 @@ class ConnectionsManager {
   _onPointerUp(e) {
     if (!this.activeDrag) return;
 
-    // Find widget under pointer
-    let targetTerminalId = null;
-    for (const [id, w] of this.app.widgets.entries()) {
-      if (id === this.activeDrag.fromId) continue;
-      const rect = w.el.getBoundingClientRect();
+    // Find node under pointer
+    let targetNodeId = null;
+    for (const node of this._getAllNodes()) {
+      if (node.id === this.activeDrag.fromId) continue;
+      if (!node.el) continue;
+      const rect = node.el.getBoundingClientRect();
       if (
         e.clientX >= rect.left &&
         e.clientX <= rect.right &&
         e.clientY >= rect.top &&
         e.clientY <= rect.bottom
       ) {
-        targetTerminalId = id;
+        targetNodeId = node.id;
         break;
       }
     }
 
-    if (targetTerminalId) {
+    if (targetNodeId) {
       this.app.sendCreateConnection({
         from: this.activeDrag.fromId,
-        to: targetTerminalId,
+        to: targetNodeId,
       });
     }
 
@@ -249,4 +258,5 @@ class ConnectionsManager {
     this.activeDrag = null;
   }
 }
+
 window.ConnectionsManager = ConnectionsManager;
