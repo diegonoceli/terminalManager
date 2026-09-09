@@ -121,14 +121,14 @@ class ConnectionsManager {
   }
 
   _getAnchorPoints(w1, w2) {
-    const p1 = w1.worldPos;
-    const p2 = w2.worldPos;
+    const p1 = w1.worldPos || { x: w1.x || 0, y: w1.y || 0 };
+    const p2 = w2.worldPos || { x: w2.x || 0, y: w2.y || 0 };
 
     // Normalizar { w, h } e { width, height } — ambos os formatos são válidos
-    const sw1 = w1.worldSize?.w ?? w1.worldSize?.width ?? 200;
-    const sh1 = w1.worldSize?.h ?? w1.worldSize?.height ?? 150;
-    const sw2 = w2.worldSize?.w ?? w2.worldSize?.width ?? 200;
-    const sh2 = w2.worldSize?.h ?? w2.worldSize?.height ?? 150;
+    const sw1 = w1.worldSize?.w ?? w1.worldSize?.width ?? w1.width ?? 200;
+    const sh1 = w1.worldSize?.h ?? w1.worldSize?.height ?? w1.height ?? 150;
+    const sw2 = w2.worldSize?.w ?? w2.worldSize?.width ?? w2.width ?? 200;
+    const sh2 = w2.worldSize?.h ?? w2.worldSize?.height ?? w2.height ?? 150;
 
     // Centro de cada nó
     const c1 = { x: p1.x + sw1 / 2, y: p1.y + sh1 / 2 };
@@ -511,16 +511,17 @@ class ConnectionsManager {
     const w = this._getNode(this.activeDrag.fromId);
     if (!w) return;
 
-    const p = w.worldPos;
-    const s = w.worldSize;
+    const p = w.worldPos || { x: w.x || 0, y: w.y || 0 };
+    const sw = w.worldSize?.w ?? w.worldSize?.width ?? w.width ?? 200;
+    const sh = w.worldSize?.h ?? w.worldSize?.height ?? w.height ?? 150;
     const dst = this.activeDrag.currentWorld;
 
     // Adaptive anchor based on cursor position relative to source node center
-    const centerX = p.x + s.w / 2;
-    const centerY = p.y + s.h / 2;
+    const centerX = p.x + sw / 2;
+    const centerY = p.y + sh / 2;
     const isLeft = dst.x < centerX;
     const src = {
-      x: isLeft ? p.x : p.x + s.w,
+      x: isLeft ? p.x : p.x + sw,
       y: centerY,
     };
 
@@ -549,19 +550,28 @@ class ConnectionsManager {
     const fromId = this.activeDrag.fromId;
     let targetNodeId = null;
 
-    // Find node under pointer
-    for (const node of this._getAllNodes()) {
-      if (node.id === fromId) continue;
-      if (!node.el) continue;
-      const rect = node.el.getBoundingClientRect();
-      if (
-        e.clientX >= rect.left &&
-        e.clientX <= rect.right &&
-        e.clientY >= rect.top &&
-        e.clientY <= rect.bottom
-      ) {
-        targetNodeId = node.id;
-        break;
+    // Direct DOM element detection for absolute accuracy
+    const hitEl = document.elementFromPoint(e.clientX, e.clientY);
+    const targetNodeEl = hitEl?.closest(".widget, .spatial-node");
+    if (targetNodeEl && targetNodeEl.dataset?.id && targetNodeEl.dataset.id !== fromId) {
+      targetNodeId = targetNodeEl.dataset.id;
+    }
+
+    // Fallback: bounding rect detection
+    if (!targetNodeId) {
+      for (const node of this._getAllNodes()) {
+        if (node.id === fromId) continue;
+        if (!node.el) continue;
+        const rect = node.el.getBoundingClientRect();
+        if (
+          e.clientX >= rect.left &&
+          e.clientX <= rect.right &&
+          e.clientY >= rect.top &&
+          e.clientY <= rect.bottom
+        ) {
+          targetNodeId = node.id;
+          break;
+        }
       }
     }
 
