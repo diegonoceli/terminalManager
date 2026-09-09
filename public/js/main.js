@@ -194,7 +194,8 @@ function handleMessage(msg) {
         for (const w of app.widgets.values()) {
           if (typeof w.fit === "function") w.fit();
         }
-      }, 60);
+        if (app.connections) app.connections.redrawAll();
+      }, 100);
       break;
     case "created":
       ensureNode(msg.terminal, true);

@@ -36,8 +36,20 @@ class ConnectionsManager {
   }
 
   _getNode(id) {
-    if (this.app.getNode) return this.app.getNode(id);
-    return this.app.widgets?.get(id);
+    if (!id) return null;
+    if (this.app.getNode) {
+      const w = this.app.getNode(id);
+      if (w) return w;
+    }
+    if (this.app.widgets) {
+      if (this.app.widgets.has(id)) return this.app.widgets.get(id);
+      for (const w of this.app.widgets.values()) {
+        if (w && (w.id === id || w.data?.id === id || w.el?.dataset?.id === id)) {
+          return w;
+        }
+      }
+    }
+    return null;
   }
 
   _getAllNodes() {
@@ -125,10 +137,10 @@ class ConnectionsManager {
     const p2 = w2.worldPos || { x: w2.x || 0, y: w2.y || 0 };
 
     // Normalizar { w, h } e { width, height } — ambos os formatos são válidos
-    const sw1 = w1.worldSize?.w ?? w1.worldSize?.width ?? w1.width ?? 200;
-    const sh1 = w1.worldSize?.h ?? w1.worldSize?.height ?? w1.height ?? 150;
-    const sw2 = w2.worldSize?.w ?? w2.worldSize?.width ?? w2.width ?? 200;
-    const sh2 = w2.worldSize?.h ?? w2.worldSize?.height ?? w2.height ?? 150;
+    const sw1 = w1.worldSize?.w ?? w1.worldSize?.width ?? w1.width ?? (w1.el ? w1.el.offsetWidth : 200);
+    const sh1 = w1.worldSize?.h ?? w1.worldSize?.height ?? w1.height ?? (w1.el ? w1.el.offsetHeight : 150);
+    const sw2 = w2.worldSize?.w ?? w2.worldSize?.width ?? w2.width ?? (w2.el ? w2.el.offsetWidth : 200);
+    const sh2 = w2.worldSize?.h ?? w2.worldSize?.height ?? w2.height ?? (w2.el ? w2.el.offsetHeight : 150);
 
     // Centro de cada nó
     const c1 = { x: p1.x + sw1 / 2, y: p1.y + sh1 / 2 };
