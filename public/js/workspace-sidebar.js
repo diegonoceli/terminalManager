@@ -1004,7 +1004,36 @@
       box.appendChild(el("h3", "", editing ? "Editar Workspace" : "Novo Workspace"));
 
       const fName = field("Nome", "text", ws.name || "");
+      const nameRow = el("div", "dir-row");
+      fName.input.style.flex = "1";
+      const nameEmojiBtn = el("button", "btn icon-btn btn-emoji-picker", "😀");
+      nameEmojiBtn.type = "button";
+      nameEmojiBtn.title = "Inserir Emoji no Nome";
+      nameEmojiBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (window.EmojiPicker) {
+          window.EmojiPicker.open({ anchorEl: nameEmojiBtn, targetInput: fName.input, clientX: e.clientX, clientY: e.clientY });
+        }
+      });
+      nameRow.appendChild(fName.input);
+      nameRow.appendChild(nameEmojiBtn);
+      fName.wrap.appendChild(nameRow);
+
       const fIcon = field("Ícone (emoji)", "text", ws.icon || "", 8);
+      const iconRow = el("div", "dir-row");
+      fIcon.input.style.flex = "1";
+      const iconEmojiBtn = el("button", "btn icon-btn btn-emoji-picker", "😀");
+      iconEmojiBtn.type = "button";
+      iconEmojiBtn.title = "Escolher Emoji do Ícone";
+      iconEmojiBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (window.EmojiPicker) {
+          window.EmojiPicker.open({ anchorEl: iconEmojiBtn, targetInput: fIcon.input, clientX: e.clientX, clientY: e.clientY });
+        }
+      });
+      iconRow.appendChild(fIcon.input);
+      iconRow.appendChild(iconEmojiBtn);
+      fIcon.wrap.appendChild(iconRow);
       const dirRow = el("div", "field");
       const dLabel = el("label", "", "Diretório de trabalho");
       const dWrap = el("div", "dir-row");

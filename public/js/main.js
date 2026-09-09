@@ -987,12 +987,33 @@ window.promptDialog = function (title, defaultValue, callback) {
   h3.textContent = title;
   modal.appendChild(h3);
 
+  const inputRow = document.createElement("div");
+  inputRow.style.display = "flex";
+  inputRow.style.gap = "6px";
+  inputRow.style.alignItems = "center";
+  inputRow.style.marginTop = "12px";
+
   const input = document.createElement("input");
   input.className = "input";
   input.type = "text";
   input.value = defaultValue || "";
-  input.style.marginTop = "12px";
-  modal.appendChild(input);
+  input.style.flex = "1";
+
+  const emojiBtn = document.createElement("button");
+  emojiBtn.className = "btn icon-btn btn-emoji-picker";
+  emojiBtn.type = "button";
+  emojiBtn.textContent = "😀";
+  emojiBtn.title = "Inserir Emoji";
+  emojiBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (window.EmojiPicker) {
+      window.EmojiPicker.open({ anchorEl: emojiBtn, targetInput: input, clientX: e.clientX, clientY: e.clientY });
+    }
+  });
+
+  inputRow.appendChild(input);
+  inputRow.appendChild(emojiBtn);
+  modal.appendChild(inputRow);
 
   const actions = document.createElement("div");
   actions.className = "modal-actions";
