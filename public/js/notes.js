@@ -39,6 +39,7 @@ class NoteWidget extends BasePortalWidget {
         <div class="portal-icon">${window.Icons ? window.Icons.svg("note", { size: 14 }) : "📝"}</div>
         <div class="portal-title">${this.title}</div>
         <div class="portal-actions">
+          <button class="portal-btn note-btn-emoji icon-btn" title="Inserir Emoji">😀</button>
           <button class="portal-btn note-btn-color icon-btn" title="Alterar cor da Nota">${window.Icons ? window.Icons.svg("palette", { size: 13 }) : "🎨"}</button>
           <button class="portal-btn note-btn-view icon-btn" title="Alternar Raw / Formatada">${window.Icons ? window.Icons.svg("file-text", { size: 13 }) : "Md"}</button>
           <button class="portal-btn note-btn-pin icon-btn" title="Fixar nome (Renomear)">${window.Icons ? window.Icons.svg("edit", { size: 13 }) : "✎"}</button>
@@ -59,6 +60,7 @@ class NoteWidget extends BasePortalWidget {
     this.titleEl = el.querySelector(".portal-title");
     this.textarea = el.querySelector(".note-area");
     this.rendered = el.querySelector(".note-rendered");
+    this.emojiBtn = el.querySelector(".note-btn-emoji");
     this.colorBtn = el.querySelector(".note-btn-color");
     this.pinBtn = el.querySelector(".note-btn-pin");
     this.moveBtn = el.querySelector(".note-btn-move");
@@ -86,6 +88,28 @@ class NoteWidget extends BasePortalWidget {
     });
 
     el.addEventListener("pointerdown", () => this.app.setActive(this.id));
+
+    if (this.emojiBtn) {
+      this.emojiBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (window.EmojiPicker) {
+          window.EmojiPicker.open({
+            anchorEl: this.emojiBtn,
+            targetInput: this.view === "raw" ? this.textarea : null,
+            onSelect: (emoji) => {
+              if (this.view !== "raw") {
+                this.updateTitle(`${emoji} ${this.title}`);
+                this.pinned = true;
+                this.pinBtn?.classList.add("active");
+                this._save();
+              }
+            },
+            clientX: e.clientX,
+            clientY: e.clientY
+          });
+        }
+      });
+    }
 
     if (this.colorBtn) {
       this.colorBtn.addEventListener("click", (e) => {

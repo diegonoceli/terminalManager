@@ -102,7 +102,10 @@ class FloorManager {
           <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;">
             <div class="form-group">
               <label style="font-weight:600;font-size:12px;color:var(--fg-muted);">Nome do Andar</label>
-              <input type="text" id="floor-name-input" class="input" value="${defaultName}" placeholder="Ex: Refactor-Auth" style="width:100%;margin-top:4px;" />
+              <div style="display:flex;gap:6px;align-items:center;margin-top:4px;">
+                <input type="text" id="floor-name-input" class="input" value="${defaultName}" placeholder="Ex: 🌿 Refactor-Auth" style="flex:1;" />
+                <button type="button" class="btn btn-emoji-picker icon-btn" title="Inserir Emoji">😀</button>
+              </div>
             </div>
 
             <div class="form-group">
@@ -147,6 +150,17 @@ class FloorManager {
     `;
 
     root.classList.remove("hidden");
+
+    const emojiBtn = root.querySelector(".btn-emoji-picker");
+    const nameInput = root.querySelector("#floor-name-input");
+    if (emojiBtn && nameInput) {
+      emojiBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (window.EmojiPicker) {
+          window.EmojiPicker.open({ anchorEl: emojiBtn, targetInput: nameInput, clientX: e.clientX, clientY: e.clientY });
+        }
+      });
+    }
 
     const close = () => {
       root.classList.add("hidden");

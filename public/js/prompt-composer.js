@@ -27,6 +27,7 @@ class PromptComposer {
         <div class="composer-input-row">
           <textarea id="composer-textarea" class="composer-textarea" rows="1" placeholder="Prompt contextual... (@ para mencionar nós, notas ou arquivos)" spellcheck="false"></textarea>
           <div class="composer-actions">
+            <button class="composer-btn btn-composer-emoji icon-btn" title="Inserir Emoji">😀</button>
             <button class="composer-btn btn-composer-attach icon-btn" title="Anexar imagem ou arquivo">📎</button>
             <button class="composer-btn btn-composer-mention icon-btn" title="Mencionar (@)">@</button>
             <button class="composer-btn btn-composer-send primary" title="Enviar para o terminal (Enter / ⌘Enter)">
@@ -43,6 +44,7 @@ class PromptComposer {
     this.textarea = el.querySelector("#composer-textarea");
     this.mentionMenu = el.querySelector("#composer-mention-menu");
     this.fileInput = el.querySelector("#composer-file-input");
+    this.btnEmoji = el.querySelector(".btn-composer-emoji");
     this.btnSend = el.querySelector(".btn-composer-send");
   }
 
@@ -138,6 +140,18 @@ class PromptComposer {
       this.textarea.value += "@";
       this.textarea.focus();
       this._checkMentionTrigger();
+    });
+
+    this.btnEmoji?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (window.EmojiPicker) {
+        window.EmojiPicker.open({
+          anchorEl: this.btnEmoji,
+          targetInput: this.textarea,
+          clientX: e.clientX,
+          clientY: e.clientY
+        });
+      }
     });
 
     // Botão de envio
