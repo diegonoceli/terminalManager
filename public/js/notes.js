@@ -15,6 +15,7 @@ class NoteWidget extends BasePortalWidget {
     this.internal = opts.internal !== false;
     this.pinned = !!opts.pinned;
     this.view = opts.view || "raw";
+    this.color = opts.color || "glass";
     this._draft = "";
     this._timer = null;
     this._saving = false;
@@ -26,6 +27,9 @@ class NoteWidget extends BasePortalWidget {
     const el = document.createElement("div");
     el.className = "spatial-node note-widget";
     el.dataset.id = this.id;
+    if (this.color && this.color !== "glass") {
+      el.dataset.color = this.color;
+    }
     el.style.width = `${this.worldSize.w}px`;
     el.style.height = `${this.worldSize.h}px`;
     el.style.transform = `translate(${this.worldPos.x}px, ${this.worldPos.y}px)`;
@@ -35,6 +39,7 @@ class NoteWidget extends BasePortalWidget {
         <div class="portal-icon">${window.Icons ? window.Icons.svg("note", { size: 14 }) : "📝"}</div>
         <div class="portal-title">${this.title}</div>
         <div class="portal-actions">
+          <button class="portal-btn note-btn-color icon-btn" title="Alterar cor da Nota">${window.Icons ? window.Icons.svg("palette", { size: 13 }) : "🎨"}</button>
           <button class="portal-btn note-btn-view icon-btn" title="Alternar Raw / Formatada">${window.Icons ? window.Icons.svg("file-text", { size: 13 }) : "Md"}</button>
           <button class="portal-btn note-btn-pin icon-btn" title="Fixar nome (Renomear)">${window.Icons ? window.Icons.svg("edit", { size: 13 }) : "✎"}</button>
           <button class="portal-btn note-btn-move icon-btn" title="Mover para o projeto">${window.Icons ? window.Icons.svg("folder", { size: 13 }) : "📁"}</button>
@@ -54,6 +59,7 @@ class NoteWidget extends BasePortalWidget {
     this.titleEl = el.querySelector(".portal-title");
     this.textarea = el.querySelector(".note-area");
     this.rendered = el.querySelector(".note-rendered");
+    this.colorBtn = el.querySelector(".note-btn-color");
     this.pinBtn = el.querySelector(".note-btn-pin");
     this.moveBtn = el.querySelector(".note-btn-move");
     const header = el.querySelector(".portal-header");
@@ -80,6 +86,13 @@ class NoteWidget extends BasePortalWidget {
     });
 
     el.addEventListener("pointerdown", () => this.app.setActive(this.id));
+
+    if (this.colorBtn) {
+      this.colorBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this._openColorPicker(e.clientX, e.clientY);
+      });
+    }
 
     this.pinBtn.classList.toggle("active", this.pinned);
     if (!this.internal) this.moveBtn.classList.add("hidden");
@@ -256,9 +269,67 @@ class NoteWidget extends BasePortalWidget {
     }
   }
 
+  _openColorPicker(clientX, clientY) {
+    const existing = document.querySelector(".note-color-picker");
+    if (existing) existing.remove();
+
+    const picker = document.createElement("div");
+    picker.className = "note-color-picker";
+
+    const presets = [
+      { name: "glass", bg: "rgba(255,255,255,0.1)", label: "Vidro (Padrão)" },
+      { name: "yellow", bg: "#fef08a", label: "Amarelo Post-it" },
+      { name: "mint", bg: "#bbf7d0", label: "Verde Menta" },
+      { name: "sky", bg: "#bae6fd", label: "Azul Céu" },
+      { name: "lavender", bg: "#e9d5ff", label: "Roxo Lavanda" },
+      { name: "rose", bg: "#fbcfe8", label: "Rosa Pastel" },
+      { name: "orange", bg: "#fed7aa", label: "Laranja Suave" },
+    ];
+
+    for (const p of presets) {
+      const sw = document.createElement("div");
+      sw.className = "note-color-swatch" + (this.color === p.name ? " active" : "");
+      sw.style.background = p.bg;
+      sw.title = p.label;
+      sw.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.color = p.name;
+        if (p.name === "glass") {
+          delete this.el.dataset.color;
+        } else {
+          this.el.dataset.color = p.name;
+        }
+        picker.remove();
+        this._save();
+        if (this.app.sendUpdateNode) {
+          this.app.sendUpdateNode(this.id, { color: this.color });
+        }
+        if (window.toast) toast(`Cor da nota alterada para ${p.label}.`);
+      });
+      picker.appendChild(sw);
+    }
+
+    document.body.appendChild(picker);
+    picker.style.left = `${Math.min(clientX, window.innerWidth - 220)}px`;
+    picker.style.top = `${Math.min(clientY, window.innerHeight - 60)}px`;
+
+    const close = (evt) => {
+      if (!picker.contains(evt.target)) {
+        picker.remove();
+        document.removeEventListener("pointerdown", close);
+      }
+    };
+    setTimeout(() => document.addEventListener("pointerdown", close), 50);
+  }
+
   _save() {
     this._saving = true;
-    if (this.app.send) this.app.send({ type: "note_content", nodeId: this.id, content: this._draft });
+    if (this.app.send) {
+      this.app.send({ type: "note_content", nodeId: this.id, content: this._draft });
+    }
+    if (this.app.sendUpdateNode && this.color) {
+      this.app.sendUpdateNode(this.id, { color: this.color });
+    }
     this._saving = false;
   }
 

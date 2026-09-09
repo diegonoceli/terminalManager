@@ -2827,4 +2827,128 @@ body.reduced-motion *::after {
   white-space: pre-wrap;
 }
 
+/* ---------- Cursor de Lápis para Desenho (US8 / FR-041) ---------- */
+.draw-widget .draw-canvas-wrap {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='%2338bdf8' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z'/%3E%3C/svg%3E") 2 20, crosshair;
+}
 
+/* ---------- Cores de Notas Markdown (NoteWidget) ---------- */
+.note-widget[data-color="yellow"] {
+  background: rgba(254, 240, 138, 0.95) !important;
+  border-color: #eab308 !important;
+  color: #713f12 !important;
+}
+.note-widget[data-color="yellow"] .portal-header {
+  background: rgba(234, 179, 8, 0.25) !important;
+  border-bottom-color: rgba(234, 179, 8, 0.4) !important;
+  color: #713f12 !important;
+}
+.note-widget[data-color="yellow"] .note-area,
+.note-widget[data-color="yellow"] .note-rendered {
+  color: #713f12 !important;
+}
+
+.note-widget[data-color="mint"] {
+  background: rgba(187, 247, 208, 0.95) !important;
+  border-color: #22c55e !important;
+  color: #14532d !important;
+}
+.note-widget[data-color="mint"] .portal-header {
+  background: rgba(34, 197, 94, 0.25) !important;
+  border-bottom-color: rgba(34, 197, 94, 0.4) !important;
+  color: #14532d !important;
+}
+.note-widget[data-color="mint"] .note-area,
+.note-widget[data-color="mint"] .note-rendered {
+  color: #14532d !important;
+}
+
+.note-widget[data-color="sky"] {
+  background: rgba(186, 230, 253, 0.95) !important;
+  border-color: #0ea5e9 !important;
+  color: #0c4a6e !important;
+}
+.note-widget[data-color="sky"] .portal-header {
+  background: rgba(14, 165, 233, 0.25) !important;
+  border-bottom-color: rgba(14, 165, 233, 0.4) !important;
+  color: #0c4a6e !important;
+}
+.note-widget[data-color="sky"] .note-area,
+.note-widget[data-color="sky"] .note-rendered {
+  color: #0c4a6e !important;
+}
+
+.note-widget[data-color="lavender"] {
+  background: rgba(233, 213, 255, 0.95) !important;
+  border-color: #a855f7 !important;
+  color: #581c87 !important;
+}
+.note-widget[data-color="lavender"] .portal-header {
+  background: rgba(168, 85, 247, 0.25) !important;
+  border-bottom-color: rgba(168, 85, 247, 0.4) !important;
+  color: #581c87 !important;
+}
+.note-widget[data-color="lavender"] .note-area,
+.note-widget[data-color="lavender"] .note-rendered {
+  color: #581c87 !important;
+}
+
+.note-widget[data-color="rose"] {
+  background: rgba(251, 207, 232, 0.95) !important;
+  border-color: #ec4899 !important;
+  color: #831843 !important;
+}
+.note-widget[data-color="rose"] .portal-header {
+  background: rgba(236, 72, 153, 0.25) !important;
+  border-bottom-color: rgba(236, 72, 153, 0.4) !important;
+  color: #831843 !important;
+}
+.note-widget[data-color="rose"] .note-area,
+.note-widget[data-color="rose"] .note-rendered {
+  color: #831843 !important;
+}
+
+.note-widget[data-color="orange"] {
+  background: rgba(254, 215, 170, 0.95) !important;
+  border-color: #f97316 !important;
+  color: #7c2d12 !important;
+}
+.note-widget[data-color="orange"] .portal-header {
+  background: rgba(249, 115, 22, 0.25) !important;
+  border-bottom-color: rgba(249, 115, 22, 0.4) !important;
+  color: #7c2d12 !important;
+}
+.note-widget[data-color="orange"] .note-area,
+.note-widget[data-color="orange"] .note-rendered {
+  color: #7c2d12 !important;
+}
+
+/* Color Picker Popover para Notas */
+.note-color-picker {
+  position: absolute;
+  z-index: 1000;
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px;
+  background: rgba(24, 24, 27, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.note-color-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.note-color-swatch:hover {
+  transform: scale(1.18);
+}
+.note-color-swatch.active {
+  border-color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5);
+}

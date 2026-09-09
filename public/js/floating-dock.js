@@ -75,6 +75,12 @@
           action: () => document.getElementById("btn-new-note")?.click(),
         },
         {
+          id: "dock-btn-binder",
+          label: "Fichário Espacial",
+          icon: svg("file-text"),
+          action: () => document.getElementById("btn-new-binder")?.click(),
+        },
+        {
           id: "dock-btn-files",
           label: "Árvore de Arquivos",
           icon: svg("file-tree"),

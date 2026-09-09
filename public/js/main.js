@@ -835,6 +835,22 @@ function createNote() {
   });
 }
 
+function createBinder() {
+  const size = app.canvas.viewportSize;
+  const center = app.canvas.screenToWorld(size.w / 2, size.h / 2);
+  const stagger = (app.newCount % 4) * 24;
+  app.newCount++;
+  send({
+    type: "binder_create",
+    title: "Novo Fichário",
+    noteIds: [],
+    x: Math.round(center.x - 230 + stagger),
+    y: Math.round(center.y - 190 + stagger),
+    width: 460,
+    height: 380,
+  });
+}
+
 function createFileTree() {
   const size = app.canvas.viewportSize;
   const center = app.canvas.screenToWorld(size.w / 2, size.h / 2);
@@ -1555,6 +1571,7 @@ document.getElementById("btn-new-device")?.addEventListener("click", () => {
 });
 document.getElementById("btn-new-editor")?.addEventListener("click", createEditor);
 document.getElementById("btn-new-note")?.addEventListener("click", createNote);
+document.getElementById("btn-new-binder")?.addEventListener("click", createBinder);
 document.getElementById("btn-new-files")?.addEventListener("click", createFileTree);
 document.getElementById("btn-new-text")?.addEventListener("click", createText);
 document.getElementById("btn-new-draw")?.addEventListener("click", createDrawing);

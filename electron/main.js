@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Notification, shell, dialog, session } from "electron";
+import { app, BrowserWindow, ipcMain, Notification, shell, dialog, session, Menu } from "electron";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFileSync, writeFileSync, existsSync, mkdirSync, watch, readdirSync } from "node:fs";
@@ -867,7 +867,30 @@ function handleMessage(msg) {
   }
 }
 
+function setupAppMenu() {
+  const template = [
+    ...(process.platform === "darwin" ? [{ role: "appMenu" }] : []),
+    {
+      label: "Editar",
+      submenu: [
+        { role: "undo", label: "Desfazer" },
+        { role: "redo", label: "Refazer" },
+        { type: "separator" },
+        { role: "cut", label: "Recortar" },
+        { role: "copy", label: "Copiar" },
+        { role: "paste", label: "Colar" },
+        { role: "selectAll", label: "Selecionar Tudo" },
+      ],
+    },
+    { role: "viewMenu" },
+    { role: "windowMenu" },
+  ];
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
+}
+
 function createWindow() {
+  setupAppMenu();
   const win = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -875,6 +898,7 @@ function createWindow() {
     minHeight: 600,
     title: "terminal manager",
     backgroundColor: "#f7f7f5",
+    autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -882,7 +906,6 @@ function createWindow() {
       webviewTag: true,
     },
   });
-  win.removeMenu();
   windows.add(win);
   mainWindow = win;
   win.on("closed", () => {

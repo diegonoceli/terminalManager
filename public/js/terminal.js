@@ -445,6 +445,7 @@ class TermWidget {
               })
               .catch(() => {});
           }
+          if (window.toast) toast("Texto colado.");
           return false;
         }
 
@@ -458,6 +459,7 @@ class TermWidget {
             const text = this.term.getSelection();
             if (text) {
               this.copyToClipboard(text);
+              if (window.toast) toast("Texto copiado!");
               e.preventDefault();
               return false;
             }
@@ -902,6 +904,7 @@ class TermWidget {
         const text = this.term.getSelection();
         if (text) {
           this.copyToClipboard(text);
+          if (window.toast) toast("Texto copiado!");
           return;
         }
       }
@@ -922,6 +925,7 @@ class TermWidget {
 
       if (text) {
         this.app.sendInput(this.id, text);
+        if (window.toast) toast("Texto colado.");
       }
     });
 
