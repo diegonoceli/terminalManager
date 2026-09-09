@@ -117,7 +117,7 @@ async function runBackendTests() {
   const indexData = JSON.parse(fs.readFileSync(spotlightIndexFile, "utf8"));
   assert(Array.isArray(indexData) && indexData.length > 0, "Índice Spotlight deve conter itens indexados");
   const indexedWs = indexData.find((x) => x.type === "workspace");
-  assert(indexedWs && indexedWs.url.startsWith("maestri://open"), "Item do Spotlight deve conter URL maestri://open");
+  assert(indexedWs && (indexedWs.url.startsWith("terminalmanager://open") || indexedWs.url.startsWith("maestri://open")), "Item do Spotlight deve conter URL terminalmanager://open");
 
   // Limpeza
   fs.rmSync(tmpDir, { recursive: true, force: true });

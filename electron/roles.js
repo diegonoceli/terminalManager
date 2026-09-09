@@ -105,7 +105,7 @@ export const ROLE_FILE = "role.json";
 /** Grava role.json (sidecar) no diretório do projeto — FR-016. */
 export function writeRolesSidecar(workingDir, roles, workspaceId) {
   if (!workingDir || !roles) return;
-  const dir = join(workingDir, ".maestri");
+  const dir = join(workingDir, ".terminalmanager");
   mkdirSync(dir, { recursive: true });
   atomicWrite(
     join(dir, ROLE_FILE),
@@ -132,7 +132,10 @@ export function writeRolesSidecar(workingDir, roles, workspaceId) {
  */
 export function readRolesSidecar(workingDir) {
   if (!workingDir) return null;
-  const file = join(workingDir, ".maestri", ROLE_FILE);
+  let file = join(workingDir, ".terminalmanager", ROLE_FILE);
+  if (!existsSync(file)) {
+    file = join(workingDir, ".maestri", ROLE_FILE);
+  }
   if (!existsSync(file)) return null;
   try {
     const parsed = JSON.parse(readFileSync(file, "utf8"));

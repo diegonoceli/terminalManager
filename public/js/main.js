@@ -1730,7 +1730,7 @@ function initThemeSelect() {
 
   if (customGhosttyThemes.length > 0) {
     const groupGhostty = document.createElement("optgroup");
-    groupGhostty.label = "Temas Ghostty (~/.maestri/terminal/themes/)";
+    groupGhostty.label = "Temas Ghostty (~/.terminalmanager/terminal/themes/)";
     for (const gt of customGhosttyThemes) {
       const opt = document.createElement("option");
       opt.value = `__ghostty_${gt.name}`;

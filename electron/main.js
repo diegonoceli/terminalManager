@@ -292,7 +292,7 @@ function handleMessage(msg) {
         break;
       }
       dialog
-        .showSaveDialog({ title: "Exportar workspace", defaultPath: `${name}.maestri`, filters: [{ name: "Maestri workspace", extensions: ["maestri"] }] })
+        .showSaveDialog({ title: "Exportar workspace", defaultPath: `${name}.terminalmanager`, filters: [{ name: "TerminalManager workspace", extensions: ["terminalmanager", "maestri"] }] })
         .then((result) => {
           if (result.canceled || !result.filePath) {
             broadcast({ type: "workspace_export_result", ok: false, canceled: true });
@@ -311,9 +311,9 @@ function handleMessage(msg) {
     case "workspace_import": {
       dialog
         .showOpenDialog({
-          title: "Importar workspace (.maestri)",
+          title: "Importar workspace (.terminalmanager / .maestri)",
           properties: ["openFile"],
-          filters: [{ name: "Maestri workspace", extensions: ["maestri"] }],
+          filters: [{ name: "TerminalManager workspace", extensions: ["terminalmanager", "maestri"] }],
         })
         .then((result) => {
           if (result.canceled || !result.filePaths[0]) {
@@ -324,7 +324,7 @@ function handleMessage(msg) {
             const bundle = JSON.parse(readFileSync(result.filePaths[0], "utf8"));
             const id = manager.importWorkspace(bundle);
             if (!id) {
-              broadcast({ type: "workspace_import_result", ok: false, error: "Arquivo .maestri inválido." });
+              broadcast({ type: "workspace_import_result", ok: false, error: "Arquivo de workspace inválido." });
               return;
             }
             manager.switchWorkspace(id);
@@ -356,7 +356,10 @@ function handleMessage(msg) {
       break;
     }
     case "list_custom_themes": {
-      const themesDir = join(homedir(), ".maestri", "terminal", "themes");
+      let themesDir = join(homedir(), ".terminalmanager", "terminal", "themes");
+      if (!existsSync(themesDir)) {
+        themesDir = join(homedir(), ".maestri", "terminal", "themes");
+      }
       const list = [];
       if (existsSync(themesDir)) {
         try {
@@ -635,7 +638,7 @@ function handleMessage(msg) {
       if (ws) {
         if (!Array.isArray(ws.floors)) ws.floors = [];
         const floorId = `floor_${randomUUID().slice(0, 8)}`;
-        const floorDir = ws.workingDir ? join(ws.workingDir, ".maestri", "floors", floorId) : "";
+        const floorDir = ws.workingDir ? join(ws.workingDir, ".terminalmanager", "floors", floorId) : "";
         const newFloor = {
           id: floorId,
           name: msg.name || `Andar ${ws.floors.length + 1}`,
@@ -647,7 +650,7 @@ function handleMessage(msg) {
         };
         if (ws.workingDir && existsSync(ws.workingDir)) {
           try {
-            mkdirSync(join(ws.workingDir, ".maestri", "floors"), { recursive: true });
+            mkdirSync(join(ws.workingDir, ".terminalmanager", "floors"), { recursive: true });
             if (process.platform === "darwin") {
               execFile("cp", ["-c", "-R", ws.workingDir, floorDir], () => {});
             } else {
@@ -718,6 +721,10 @@ function handleMessage(msg) {
       const targetDir = floor.floorPath && existsSync(floor.floorPath) ? floor.floorPath : (ws.workingDir || process.cwd());
       const env = {
         ...process.env,
+        TERMINALMANAGER_FLOOR_NAME: floor.name || "",
+        TERMINALMANAGER_FLOOR_ID: floor.id || "",
+        TERMINALMANAGER_FLOOR_BRANCH: floor.branch || "",
+        TERMINALMANAGER_WORKSPACE_DIR: ws.workingDir || "",
         MAESTRI_FLOOR_NAME: floor.name || "",
         MAESTRI_FLOOR_ID: floor.id || "",
         MAESTRI_FLOOR_BRANCH: floor.branch || "",
@@ -992,7 +999,7 @@ function openFromUrl(rawUrl) {
   }
 }
 
-// Deep link maestri:// (Spotlight / navegador) — FR-051
+// Deep link terminalmanager:// e maestri:// (Spotlight / navegador) — FR-051
 app.on("open-url", (e, url) => {
   e.preventDefault();
   if (manager && mainWindow) {
@@ -1015,15 +1022,15 @@ app.whenReady().then(() => {
   manager.restore();
   updateSpotlightIndex(manager, app.getPath("userData"), true);
 
-  const argvUrl = process.argv.find((a) => typeof a === "string" && a.startsWith("maestri://"));
+  const argvUrl = process.argv.find((a) => typeof a === "string" && (a.startsWith("terminalmanager://") || a.startsWith("maestri://")));
   if (argvUrl) pendingUrl = argvUrl;
 
   if (process.defaultApp) {
     if (process.argv.length >= 2) {
-      app.setAsDefaultProtocolClient("maestri", process.execPath, [process.argv[1]]);
+      app.setAsDefaultProtocolClient("terminalmanager", process.execPath, [process.argv[1]]);
     }
   } else {
-    app.setAsDefaultProtocolClient("maestri");
+    app.setAsDefaultProtocolClient("terminalmanager");
   }
 
   ipcMain.on("msg", (event, payload) => {

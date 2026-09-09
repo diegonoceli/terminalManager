@@ -482,7 +482,7 @@ class PromptComposer {
         if (noteNode && noteNode.content) {
           parts.push(`[Contexto da Nota: ${chip.label}]\n${noteNode.content}`);
         } else {
-          parts.push(`maestri note read ${chip.value}`);
+          parts.push(`terminalmanager note read ${chip.value}`);
         }
       } else if (chip.type === "image") {
         parts.push(`[Imagem anexada: ${chip.label}]`);

@@ -33,7 +33,7 @@ export function updateSpotlightIndex(managerOrIterable, userDataDir, immediate =
     // É um iterable (como Map.values()) — construir um Map falso para iteração
     const wsArr = [...managerOrIterable];
     workspacesMap = new Map(wsArr.map((ws, i) => [ws.id || String(i), ws]));
-    if (!userDataDir) userDataDir = join(tmpdir(), "maestri-spotlight-test");
+    if (!userDataDir) userDataDir = join(tmpdir(), "terminalmanager-spotlight-test");
     immediate = true;
   } else if (managerOrIterable && managerOrIterable.workspaces) {
     workspacesMap = managerOrIterable.workspaces;
@@ -70,7 +70,7 @@ export function updateSpotlightIndex(managerOrIterable, userDataDir, immediate =
           title: wsName,
           snippet: `Workspace: ${wsName}. Diretório: ${wsDir}`,
           workspaceId: wsId,
-          url: `maestri://open?workspace=${wsId}`,
+          url: `terminalmanager://open?workspace=${wsId}`,
           updatedAt: new Date().toISOString(),
         };
         indexItems.push(wsItem);
@@ -79,7 +79,7 @@ export function updateSpotlightIndex(managerOrIterable, userDataDir, immediate =
         currentFiles.add(wsFile);
         writeFileSync(
           join(itemsDir, wsFile),
-          `# ${wsName}\n\nWorkspace do Maestri\nDiretório: ${wsDir}\nID: ${wsId}\nURL: maestri://open?workspace=${wsId}\n`
+          `# ${wsName}\n\nWorkspace do TerminalManager\nDiretório: ${wsDir}\nID: ${wsId}\nURL: terminalmanager://open?workspace=${wsId}\n`
         );
 
         // 2. Nós do workspace
@@ -92,7 +92,7 @@ export function updateSpotlightIndex(managerOrIterable, userDataDir, immediate =
               snippet: `Terminal "${node.title || "Terminal"}" no workspace ${wsName}`,
               workspaceId: wsId,
               nodeId: node.id,
-              url: `maestri://open?workspace=${wsId}&node=${node.id}`,
+              url: `terminalmanager://open?workspace=${wsId}&node=${node.id}`,
               updatedAt: new Date().toISOString(),
             };
             indexItems.push(termItem);
@@ -101,7 +101,7 @@ export function updateSpotlightIndex(managerOrIterable, userDataDir, immediate =
             currentFiles.add(termFile);
             writeFileSync(
               join(itemsDir, termFile),
-              `# ${node.title || "Terminal"}\n\nTerminal no workspace ${wsName}\nID: ${node.id}\nURL: maestri://open?workspace=${wsId}&node=${node.id}\n`
+              `# ${node.title || "Terminal"}\n\nTerminal no workspace ${wsName}\nID: ${node.id}\nURL: terminalmanager://open?workspace=${wsId}&node=${node.id}\n`
             );
           } else if (node.type === "note") {
             let noteContent = "";
@@ -121,7 +121,7 @@ export function updateSpotlightIndex(managerOrIterable, userDataDir, immediate =
               snippet: `Nota "${node.title || "Nota"}" no workspace ${wsName}: ${snippet}`,
               workspaceId: wsId,
               nodeId: node.id,
-              url: `maestri://open?workspace=${wsId}&node=${node.id}`,
+              url: `terminalmanager://open?workspace=${wsId}&node=${node.id}`,
               updatedAt: new Date().toISOString(),
             };
             indexItems.push(noteItem);
@@ -130,7 +130,7 @@ export function updateSpotlightIndex(managerOrIterable, userDataDir, immediate =
             currentFiles.add(noteFile);
             writeFileSync(
               join(itemsDir, noteFile),
-              `# ${node.title || "Nota"}\n\nNota no workspace ${wsName}\n\n${noteContent}\n\n---\nURL: maestri://open?workspace=${wsId}&node=${node.id}\n`
+              `# ${node.title || "Nota"}\n\nNota no workspace ${wsName}\n\n${noteContent}\n\n---\nURL: terminalmanager://open?workspace=${wsId}&node=${node.id}\n`
             );
           } else if (node.type === "binder") {
             const pageTitles = (node.pageIds || [])
@@ -144,7 +144,7 @@ export function updateSpotlightIndex(managerOrIterable, userDataDir, immediate =
               snippet: `Fichário "${node.title || "Fichário"}" no workspace ${wsName} com ${pageTitles.length} páginas: ${pageTitles.join(", ")}`,
               workspaceId: wsId,
               nodeId: node.id,
-              url: `maestri://open?workspace=${wsId}&node=${node.id}`,
+              url: `terminalmanager://open?workspace=${wsId}&node=${node.id}`,
               updatedAt: new Date().toISOString(),
             };
             indexItems.push(binderItem);
@@ -153,7 +153,7 @@ export function updateSpotlightIndex(managerOrIterable, userDataDir, immediate =
             currentFiles.add(binderFile);
             writeFileSync(
               join(itemsDir, binderFile),
-              `# ${node.title || "Fichário"}\n\nFichário no workspace ${wsName}\nPáginas:\n${pageTitles.map((t) => `- ${t}`).join("\n")}\n\nURL: maestri://open?workspace=${wsId}&node=${node.id}\n`
+              `# ${node.title || "Fichário"}\n\nFichário no workspace ${wsName}\nPáginas:\n${pageTitles.map((t) => `- ${t}`).join("\n")}\n\nURL: terminalmanager://open?workspace=${wsId}&node=${node.id}\n`
             );
           }
         }

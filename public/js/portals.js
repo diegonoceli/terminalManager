@@ -448,7 +448,7 @@ class WebPortalWidget extends BasePortalWidget {
     }
   }
 
-  /* ---- Automação de Portais Web via CLI maestri portal (T036 / US7 / FR-040) ---- */
+  /* ---- Automação de Portais Web via CLI terminalmanager portal (T036 / US7 / FR-040) ---- */
   async evalJS(code) {
     if (this.viewEl && typeof this.viewEl.executeJavaScript === "function") {
       return this.viewEl.executeJavaScript(code);

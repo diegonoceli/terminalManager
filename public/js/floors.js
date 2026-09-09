@@ -109,7 +109,7 @@ class FloorManager {
               <label style="font-weight:600;font-size:12px;color:var(--fg-muted);">Branch Git Isolada</label>
               <input type="text" id="floor-branch-input" class="input" value="${defaultBranch}" placeholder="Ex: feature/auth-v2" style="width:100%;margin-top:4px;" />
               <div style="font-size:11px;color:var(--fg-muted);margin-top:4px;">
-                ⚡ macOS APFS: Clonagem Copy-on-Write instantânea em <code>.maestri/floors/</code> sem duplicar armazenamento.
+                ⚡ macOS APFS: Clonagem Copy-on-Write instantânea em <code>.terminalmanager/floors/</code> sem duplicar armazenamento.
               </div>
             </div>
 
@@ -204,7 +204,7 @@ class FloorManager {
           </div>
           <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;">
             <div style="font-size:12px;color:var(--fg-muted);">
-              Variáveis injetadas: <code>$MAESTRI_FLOOR_NAME</code>, <code>$MAESTRI_FLOOR_ID</code>, <code>$MAESTRI_FLOOR_BRANCH</code>, <code>$MAESTRI_WORKSPACE_DIR</code>.
+              Variáveis injetadas: <code>$TERMINALMANAGER_FLOOR_NAME</code>, <code>$TERMINALMANAGER_FLOOR_ID</code>, <code>$TERMINALMANAGER_FLOOR_BRANCH</code>, <code>$TERMINALMANAGER_WORKSPACE_DIR</code>.
             </div>
 
             <!-- Setup Hook -->

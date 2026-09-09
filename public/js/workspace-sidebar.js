@@ -718,10 +718,10 @@
         m.appendChild(d);
       };
       item("Editar", () => this.openModal(w));
-      item("Exportar .maestri", () => {
+      item("Exportar .terminalmanager", () => {
         if (this.send) this.send({ type: "workspace_export", workspaceId: w.id });
       });
-      item("Importar .maestri…", () => {
+      item("Importar .terminalmanager…", () => {
         if (this.send) this.send({ type: "workspace_import" });
       });
       if (w.workingDir) item("Abrir no Editor", () => {

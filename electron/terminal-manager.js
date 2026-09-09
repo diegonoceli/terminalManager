@@ -997,8 +997,8 @@ export class TerminalManager {
     let relativePath = "";
 
     if (ws && ws.workingDir && existsSync(ws.workingDir)) {
-      dir = join(ws.workingDir, ".maestri", "assets");
-      relativePath = `.maestri/assets/${filename}`;
+      dir = join(ws.workingDir, ".terminalmanager", "assets");
+      relativePath = `.terminalmanager/assets/${filename}`;
     } else if (this.noteStore && this.noteStore.dir) {
       dir = join(this.noteStore.dir, "assets");
       relativePath = `assets/${filename}`;
@@ -1444,8 +1444,8 @@ export class TerminalManager {
     for (const n of ws.nodes || []) if (n.roleId) usedRoles.add(n.roleId);
     const roles = (this.settings.roles || []).filter((r) => usedRoles.has(r.id));
     return {
-      app: "maestri",
-      format: "maestri-bundle",
+      app: "terminalmanager",
+      format: "terminalmanager-bundle",
       version: 1,
       exportedAt: new Date().toISOString(),
       workspace: {
@@ -1473,9 +1473,11 @@ export class TerminalManager {
     };
   }
 
-  /** Cria/atualiza um workspace a partir de um bundle `.maestri` importado. */
+  /** Cria/atualiza um workspace a partir de um bundle `.terminalmanager` (ou `.maestri`) importado. */
   importWorkspace(bundle) {
-    if (!bundle || bundle.app !== "maestri" || bundle.format !== "maestri-bundle") return null;
+    const isApp = bundle && (bundle.app === "terminalmanager" || bundle.app === "maestri");
+    const isFormat = bundle && (bundle.format === "terminalmanager-bundle" || bundle.format === "maestri-bundle");
+    if (!bundle || !isApp || !isFormat) return null;
     const src = bundle.workspace || {};
     const id = `ws_${randomUUID().slice(0, 8)}`;
     const now = new Date().toISOString();

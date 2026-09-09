@@ -81,7 +81,7 @@ async function runAllTests() {
   const discovered = discoverRoles(testDir);
   assert(discovered.length > 0, "Descobridor de responsabilidades deve encontrar role.json local");
 
-  const { detectAgents, executeMaestriCli } = await import("../electron/agent-cli.js");
+  const { detectAgents, executeTerminalManagerCli } = await import("../electron/agent-cli.js");
   const agents = detectAgents();
   assert(Array.isArray(agents) && agents.length === 3, "Deve listar claude, codex e opencode");
   console.log("   ✓ Terminais, papéis role.json e agentes CLI aprovados.");
@@ -117,9 +117,9 @@ async function runAllTests() {
   assert(chainOutput.includes("Arquitetura de Microsserviços"), "Deve conter conteúdo da primeira nota");
   assert(chainOutput.includes("Detalhes do Banco"), "Deve conter conteúdo da nota conectada em cadeia (--chain)");
 
-  // CLI maestri note read
-  const cliRes = await executeMaestriCli(["note", "read", noteA.id, "--chain"], { manager });
-  assert(cliRes.ok && cliRes.output.includes("PostgreSQL"), "CLI maestri note read --chain deve responder corretamente");
+  // CLI terminalmanager note read
+  const cliRes = await executeTerminalManagerCli(["note", "read", noteA.id, "--chain"], { manager });
+  assert(cliRes.ok && cliRes.output.includes("PostgreSQL"), "CLI terminalmanager note read --chain deve responder corretamente");
   console.log("   ✓ Notas Markdown e encadeamento recursivo aprovados.");
 
   // ----------------------------------------------------
@@ -137,9 +137,9 @@ async function runAllTests() {
   assert(conn && conn.id, "Conexão entre nós criada com sucesso");
   assert.strictEqual(conn.style, "circuit", "Estilo da conexão deve ser circuit (rails 90°)");
 
-  // Despacho de mensagem maestri send
-  const sendRes = await executeMaestriCli(["send", "Agente B", "Olá Agente B, analise os logs"], { manager });
-  assert(sendRes.ok, "maestri send deve despachar mensagem para terminal conectado");
+  // Despacho de mensagem terminalmanager send
+  const sendRes = await executeTerminalManagerCli(["send", "Agente B", "Olá Agente B, analise os logs"], { manager });
+  assert(sendRes.ok, "terminalmanager send deve despachar mensagem para terminal conectado");
   console.log("   ✓ Conexões, roteamento de mensagens e ties aprovados.");
 
   // ----------------------------------------------------
@@ -163,19 +163,19 @@ async function runAllTests() {
   // ----------------------------------------------------
   // Domínio 8: Portais Web & Mobile (FR-039 a FR-044)
   // ----------------------------------------------------
-  console.log("▶ [7/10] Testando Portais Web, Mobile Device Manager e CLI maestri portal/device...");
+  console.log("▶ [7/10] Testando Portais Web, Mobile Device Manager e CLI terminalmanager portal/device...");
   const { DeviceManager } = await import("../electron/device-manager.js");
   const devMgr = new DeviceManager();
   assert(typeof devMgr.listDevices === "function", "DeviceManager deve expor listDevices");
   assert(typeof devMgr.getAccessibilityTree === "function", "DeviceManager deve expor getAccessibilityTree");
 
-  // Automação maestri portal
-  const portalCli = await executeMaestriCli(["portal", "eval", "p1", "document.title"], { manager });
-  assert(portalCli.ok || portalCli.output !== undefined, "maestri portal eval deve executar");
+  // Automação terminalmanager portal
+  const portalCli = await executeTerminalManagerCli(["portal", "eval", "p1", "document.title"], { manager });
+  assert(portalCli.ok || portalCli.output !== undefined, "terminalmanager portal eval deve executar");
 
-  // Automação maestri device
-  const deviceCli = await executeMaestriCli(["device", "action", "emulator-5554", "key", "home"], { manager, deviceManager: devMgr });
-  assert(deviceCli !== undefined, "maestri device deve processar ações de botões físicos");
+  // Automação terminalmanager device
+  const deviceCli = await executeTerminalManagerCli(["device", "action", "emulator-5554", "key", "home"], { manager, deviceManager: devMgr });
+  assert(deviceCli !== undefined, "terminalmanager device deve processar ações de botões físicos");
   console.log("   ✓ Portais web, emuladores e automação de acessibilidade aprovados.");
 
   // ----------------------------------------------------
